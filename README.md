@@ -9,6 +9,12 @@ a tab before turning out to deserve its own app (different permission
 profile, different usage pattern — open it directly, search, done, no
 always-on background service).
 
+Search results can be narrowed further: after any search, "🔎 Nur in
+diesen N Treffern weitersuchen" restricts every following search — simple
+or advanced, with completely different terms or fields — to just that
+result set, until cleared again. Repeatable, so a broad first search can be
+narrowed down step by step instead of building one giant combined query.
+
 ## Screenshots
 
 <table>
@@ -16,6 +22,9 @@ always-on background service).
 <td><img src="screenshots/suche.png" width="220" alt="Sucher-Startbildschirm"><br>Suche</td>
 <td><img src="screenshots/ergebnisse.png" width="220" alt="Dateisuche mit Volltext-Treffern"><br>Volltext-Treffer</td>
 <td><img src="screenshots/erweiterte-suche.png" width="220" alt="Erweiterte Suche: Autor/Titel/Buchserie/Dateityp"><br>Erweiterte Suche</td>
+</tr>
+<tr>
+<td><img src="screenshots/eingrenzen.png" width="220" alt="Suchergebnisse eingrenzen"><br>Ergebnisse eingrenzen</td>
 </tr>
 </table>
 

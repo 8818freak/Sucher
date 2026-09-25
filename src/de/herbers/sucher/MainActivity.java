@@ -65,6 +65,14 @@ public class MainActivity extends Activity {
     // (Mathias: "Quellen fuer einzelne Suchen ausschliessen").
     private static final java.util.Set<String> EXCLUDED_CATS = new java.util.HashSet<>();
 
+    // Ergebnis-Eingrenzung ("in diesen Treffern weitersuchen", Mathias'
+    // Wunsch): null = keine Einschraenkung. Bewusst unabhaengig von
+    // lastQuery/den erweiterten Feldern - genau der Sinn ist ja, denselben
+    // Treffer-Ausschnitt mit EINER ANDEREN Suche/anderen Parametern erneut
+    // zu durchsuchen. Static wie lastQuery, ueberlebt darum auch die
+    // Rueckkehr aus der Vorschau.
+    private static List<String> scopePaths = null;
+
     private static final int REQ_PIM = 501;
 
     private boolean showSettings = false;
@@ -203,6 +211,8 @@ public class MainActivity extends Activity {
         root.addView(historyBox);
 
         root.addView(categoryChips(d));
+
+        if (scopePaths != null) root.addView(scopeBanner(d));
 
         TextView advToggle = new TextView(this);
         advToggle.setText(advancedOpen ? "▾ Erweiterte Suche" : "▸ Erweiterte Suche");
@@ -559,7 +569,7 @@ public class MainActivity extends Activity {
         long modifiedTo = advModifiedTo > 0 ? advModifiedTo + DateUtils.DAY_IN_MILLIS - 1 : 0;
         List<SearchStore.FileHit> files = SearchStore.get(this).advancedSearch(
                 advName, advAuthor, advTitle, advSeries, advExts,
-                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, 100);
+                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, 100, scopePaths);
         if (files.isEmpty()) {
             TextView none = new TextView(this);
             none.setText("Keine Treffer.");
@@ -570,7 +580,62 @@ public class MainActivity extends Activity {
         }
         View[] highlightHolder = new View[1];
         results.addView(card("Dateien", files.size(), d, fileRows(files, d, highlightHolder), "files_adv"));
+        results.addView(narrowRow(files, d));
         if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
+    }
+
+    /** Zeile unter einer Dateien-Trefferliste, um denselben Ausschnitt mit
+     *  EINER ANDEREN Suche weiter einzugrenzen (Mathias' Wunsch: "innerhalb
+     *  der Suchergebnisse erneut suchen, aber auch mit anderen Parametern").
+     *  Ersetzt scopePaths bei jedem Antippen - so laesst sich mehrfach
+     *  hintereinander eingrenzen, jedes Mal auf Basis der zuletzt sichtbaren
+     *  Treffer, unabhaengig davon ob per einfacher oder erweiterter Suche. */
+    private View narrowRow(List<SearchStore.FileHit> files, int d) {
+        TextView t = new TextView(this);
+        t.setText("🔎 Nur in diesen " + files.size() + " Treffern weitersuchen");
+        t.setTextColor(Color.parseColor("#2E9BE6"));
+        t.setTextSize(13 * fs);
+        t.setPadding(4 * d, 6 * d, 4 * d, 16 * d);
+        t.setOnClickListener(v -> {
+            List<String> paths = new ArrayList<>();
+            for (SearchStore.FileHit h : files) paths.add(h.path);
+            scopePaths = paths;
+            rebuild();
+        });
+        return t;
+    }
+
+    /** Banner ueber den Ergebnissen, solange eine Eingrenzung aktiv ist -
+     *  zeigt worauf eingegrenzt wurde und erlaubt, sie wieder aufzuheben. */
+    private View scopeBanner(int d) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#1B3A52"));
+        bg.setCornerRadius(10 * d);
+        row.setBackground(bg);
+        row.setPadding(12 * d, 8 * d, 12 * d, 8 * d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = 10 * d;
+        row.setLayoutParams(lp);
+
+        TextView label = new TextView(this);
+        label.setText("🔎 Eingegrenzt auf " + scopePaths.size() + " Treffer");
+        label.setTextColor(Color.parseColor("#8ecbff"));
+        label.setTextSize(12.5f * fs);
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(label);
+
+        TextView clear = new TextView(this);
+        clear.setText("Aufheben ✕");
+        clear.setTextColor(Color.parseColor("#2E9BE6"));
+        clear.setTextSize(12.5f * fs);
+        clear.setPadding(12 * d, 0, 0, 0);
+        clear.setOnClickListener(v -> { scopePaths = null; rebuild(); });
+        row.addView(clear);
+        return row;
     }
 
     private void runSearch(String q, LinearLayout results, int d) {
@@ -588,7 +653,7 @@ public class MainActivity extends Activity {
         if (!hasNotifPermission()) results.addView(notifPermissionHint(d));
 
         List<SearchStore.FileHit> files = (hasStoragePermission() && !EXCLUDED_CATS.contains("files"))
-                ? SearchStore.get(this).search(q, 60) : new ArrayList<>();
+                ? SearchStore.get(this).search(q, 60, scopePaths) : new ArrayList<>();
         List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(q);
         List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(q);
         List<SearchStore.NotifHit> notifs = new ArrayList<>();
@@ -623,7 +688,10 @@ public class MainActivity extends Activity {
         }
         View[] highlightHolder = new View[1];
 
-        if (!files.isEmpty()) results.addView(card("Dateien", files.size(), d, fileRows(files, d, highlightHolder), "files"));
+        if (!files.isEmpty()) {
+            results.addView(card("Dateien", files.size(), d, fileRows(files, d, highlightHolder), "files"));
+            results.addView(narrowRow(files, d));
+        }
         if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
         if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
         if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));

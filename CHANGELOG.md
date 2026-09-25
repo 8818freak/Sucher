@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.17
+- Neu: Suchergebnisse eingrenzen. Unter einer Dateien-Trefferliste erscheint
+  „🔎 Nur in diesen N Treffern weitersuchen" - antippen beschränkt jede
+  weitere Suche (einfach oder erweitert, auch mit völlig anderen
+  Suchbegriffen/Feldern) auf genau diese Treffermenge, bis man sie über
+  „Aufheben" wieder verwirft. Lässt sich mehrfach hintereinander anwenden,
+  um sich schrittweise zum gesuchten Ergebnis vorzuarbeiten (Mathias'
+  Wunsch: „innerhalb der Suchergebnisse erneut suchen, aber auch mit
+  anderen Parametern").
+
 ## 0.16
 - Echten Indizier-Bug behoben: Wurde „Inhalt durchsuchbar machen" für einen
   Ordner nachträglich eingeschaltet, blieb die Volltextsuche darin
