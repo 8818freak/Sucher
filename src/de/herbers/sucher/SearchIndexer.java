@@ -30,11 +30,26 @@ final class SearchIndexer {
     private SearchIndexer() {}
 
     private static volatile boolean running = false;
+    private static volatile boolean stopRequested = false;
     static volatile int scanned = 0;
     static volatile int contentIndexed = 0;
     static volatile String currentPath = "";
 
     static boolean isRunning() { return running; }
+
+    /** Kooperativer Stopp fuer IndexJobService.onStopJob(): das System hat
+     *  das Zeitfenster des Jobs beendet, aber der Scan lief bis vor diesem
+     *  Fix als eigener, vom Job-Lebenszyklus abgekoppelter Thread einfach
+     *  weiter - onStopJob() konnte ihn nicht wirklich anhalten. Damit blieb
+     *  fuer die naechste Job-Ausfuehrung (deren Thread ja noch "running"
+     *  war) nur ein sofortiger, folgenloser No-Op via start() uebrig, ohne
+     *  je jobFinished() aufzurufen - das System wertete den Job darum
+     *  wiederholt als haengengeblieben und brach ihn zwangsweise ab (24x
+     *  laut dumpsys jobscheduler, cachten Ausfuehrungsstatistiken zufolge),
+     *  was App-Prozess und -Job zunehmend drosselte. walk()/indexOne()
+     *  pruefen dieses Flag jetzt zwischen Dateien und beenden sich zuegig,
+     *  sodass der Job sich sauber (und rechtzeitig) als fertig meldet. */
+    static void requestStop() { stopRequested = true; }
 
     /** Groessenobergrenze fuer Inhaltsextraktion (Metadaten werden trotzdem
      *  immer gespeichert) - verhindert dass ein Mammut-Archiv/-Video die
@@ -48,6 +63,7 @@ final class SearchIndexer {
     static void start(Context ctx, Runnable onDone) {
         if (running) return;
         running = true;
+        stopRequested = false;
         scanned = 0; contentIndexed = 0; currentPath = "";
         Context app = ctx.getApplicationContext();
         contextApp = app;
@@ -65,11 +81,17 @@ final class SearchIndexer {
                     if (Settings.contentIndexingEnabled(app, cf)) contentRootsCached.add(cf);
                 }
                 for (String root : folders) {
+                    if (stopRequested) break;
                     File rootDir = new File(root);
                     if (rootDir.isDirectory()) walk(store, rootDir);
-                    store.pruneStale(root, runStart);
+                    // Nur als vollstaendig behandeln (und Verschwundenes
+                    // entfernen), wenn der Ordner nicht durch einen Stopp
+                    // mittendrin abgebrochen wurde - sonst wuerden noch
+                    // nicht wieder erreichte Dateien faelschlich als
+                    // geloescht/verschoben aussortiert.
+                    if (!stopRequested) store.pruneStale(root, runStart);
                 }
-                Settings.setSearchLastRun(app, System.currentTimeMillis());
+                if (!stopRequested) Settings.setSearchLastRun(app, System.currentTimeMillis());
             } catch (Throwable t) {
                 android.util.Log.w("EdgeTabSearch", "Indizierlauf abgebrochen", t);
             } finally {
@@ -94,6 +116,7 @@ final class SearchIndexer {
         File[] children = dir.listFiles();
         if (children == null) return;
         for (File f : children) {
+            if (stopRequested) return;
             if (f.isDirectory()) {
                 if (f.isHidden() || f.getName().startsWith(".")) continue; // .thumbnails, .trash etc.
                 walk(store, f);

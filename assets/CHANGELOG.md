@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.18
+- Massives Indizier-Problem behoben: der Hintergrund-Abgleich (IndexJobService)
+  stoppte den laufenden Scan bei `onStopJob()` nicht wirklich - der Thread lief
+  unbeaufsichtigt weiter, während das System den Job nach Ablauf seines
+  Zeitfensters wiederholt zwangsbeenden musste (24 Timeouts laut
+  `dumpsys jobscheduler` bei Mathias' rund 50.000-Dateien-Bibliothek nach acht
+  Stunden mit unter 3.000 erfassten Dateien). Jeder Zwangsabbruch löste sofort
+  einen Neustartversuch aus, der ins selbe Problem lief und die App zunehmend
+  drosselte. Der Scan reagiert jetzt kooperativ auf das Stopp-Signal und meldet
+  sich zügig als fertig; ein unvollständig durchlaufener Ordner wird dabei
+  nicht mehr fälschlich auf "aufgeräumt" gesetzt (sonst wären noch nicht
+  wieder erreichte Dateien als gelöscht behandelt worden).
+- Tipp bei großen Bibliotheken: der Knopf „Jetzt neu indizieren" in den
+  Einstellungen läuft, solange die App offen ist, ohne das Zeitfenster-Limit
+  des Hintergrund-Jobs - für einen einmaligen großen Nachholbedarf (z. B. nach
+  Einschalten der Volltext-Indizierung für einen bestehenden Ordner) meist
+  deutlich schneller als abzuwarten, bis der Hintergrund-Job in kleinen
+  Häppchen durchkommt.
+
 ## 0.17
 - Neu: Suchergebnisse eingrenzen. Unter einer Dateien-Trefferliste erscheint
   „🔎 Nur in diesen N Treffern weitersuchen" - antippen beschränkt jede

@@ -55,6 +55,15 @@ public class IndexJobService extends JobService {
                 || Settings.searchFolders(this).isEmpty()) {
             return false;
         }
+        if (SearchIndexer.isRunning()) {
+            // Laeuft schon (z.B. manuell angestossen, oder ein vorheriger
+            // Job-Lauf klingt gerade erst aus) - nichts zu tun anmelden,
+            // statt "true" zurueckzugeben und nie jobFinished() aufzurufen.
+            // Genau das fuehrte vorher dazu, dass das System den Job nach
+            // Ablauf des Zeitfensters immer wieder zwangsbeenden musste
+            // (siehe SearchIndexer.requestStop()-Kommentar).
+            return false;
+        }
         PdfExtractorHelper.init(getApplicationContext());
         SearchIndexer.start(this, () -> jobFinished(params, false));
         return true;
@@ -62,9 +71,15 @@ public class IndexJobService extends JobService {
 
     @Override
     public boolean onStopJob(JobParameters params) {
-        // Das System braucht die Zeit anderweitig - beim naechsten geplanten
-        // Lauf (oder dem naechsten App-Start) einfach von vorn, dank
-        // mtime-Vergleich billig (siehe Klassenkommentar).
-        return true;
+        // Das System braucht die Zeit anderweitig - den laufenden Scan
+        // kooperativ zum baldigen Aufhoeren bewegen (er hinterlaesst dank
+        // des mtime-Vergleichs sowieso nie einen kaputten Zwischenstand),
+        // statt ihn wie zuvor als unbeaufsichtigten Thread weiterlaufen zu
+        // lassen. "false" zurueckgeben: kein sofortiger Neustart-Versuch -
+        // der naechste periodische Lauf (oder der naechste App-Start)
+        // reicht, ein knapper Retry-Loop wuerde nur erneut ins selbe
+        // Zeitfenster-Problem laufen.
+        SearchIndexer.requestStop();
+        return false;
     }
 }
