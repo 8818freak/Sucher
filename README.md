@@ -69,4 +69,12 @@ cp build/base.apk build/unsigned.apk
 A companion to EdgeTab for the same reason EdgeTab exists: the standard
 Android search experience doesn't reach into file contents, and no single
 free app covers Office+PDF+e-book+comic-metadata search without turning
-into a 19MB ad-supported bundle. MIT-licensed groundwork, same author.
+into a 19MB ad-supported bundle. Free/open-source groundwork, same author.
+
+## License
+
+GNU General Public License v3.0 (or later) — see `LICENSE`. Bundled
+third-party libraries (Apache POI, PDFBox-Android, Apache Commons,
+Log4j API, SparseBitSet, curvesapi) remain under their own permissive
+licenses (Apache 2.0 / BSD-3-Clause), both compatible with GPLv3 —
+details in `LICENSE`.
