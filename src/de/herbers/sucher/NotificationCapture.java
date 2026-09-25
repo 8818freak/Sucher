@@ -48,7 +48,16 @@ public class NotificationCapture extends NotificationListenerService {
         if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) return;
 
         String pkg = sbn.getPackageName();
-        SearchStore.get(this).addNotification(pkg, appLabel(pkg), title, text, sbn.getPostTime());
+        String label = appLabel(pkg);
+        String finalText = text;
+        long postTime = sbn.getPostTime();
+        // onNotificationPosted runs on the main thread; addNotification() hits
+        // SQLite, which can block waiting for a connection while SearchIndexer
+        // is mid-run (observed as ANRs: "Input dispatching timed out" with the
+        // main thread stuck in SQLiteConnectionPool.waitForConnection).
+        new Thread(() ->
+            SearchStore.get(this).addNotification(pkg, label, title, finalText, postTime)
+        ).start();
     }
 
     private String appLabel(String pkg) {

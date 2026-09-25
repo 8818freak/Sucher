@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.14
+- Absturz-nahes Einfrieren behoben ("reagiert nicht"/ANR): eine eintreffende
+  Benachrichtigung wurde direkt auf dem Hauptthread in die Datenbank
+  geschrieben. Lief nebenbei gerade ein (Neu-)Indizierungslauf, konnte das
+  den Hauptthread minutenlang blockieren, weil beide auf dieselbe
+  SQLite-Verbindung warteten - Folge waren "App reagiert nicht"-Meldungen.
+  Schreibt jetzt in einem eigenen Hintergrund-Thread; zusätzlich WAL-Modus
+  aktiviert, damit Suche und Indizierung sich generell weniger blockieren.
+
 ## 0.13
 - Neue Seite „Über Sucher" in den Einstellungen: Versionsnummer, Lizenztext
   und ein aufklappbares Änderungsprotokoll (dieses Dokument, direkt in der

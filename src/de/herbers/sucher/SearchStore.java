@@ -26,7 +26,13 @@ public class SearchStore extends SQLiteOpenHelper {
         return instance;
     }
 
-    private SearchStore(Context ctx) { super(ctx, DB, null, VERSION); }
+    private SearchStore(Context ctx) {
+        super(ctx, DB, null, VERSION);
+        // Without WAL, SQLiteOpenHelper serialises all access onto one
+        // connection - a search query on the main thread would queue up
+        // behind the indexer's writes during a long (re-)index run.
+        setWriteAheadLoggingEnabled(true);
+    }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
