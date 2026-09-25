@@ -104,7 +104,9 @@ final class SearchIndexer {
     }
 
     private static boolean contentWanted(String path) {
-        for (String root : contentRootsCached) if (path.startsWith(root)) return true;
+        for (String root : contentRootsCached) {
+            if (path.equals(root) || path.startsWith(root.endsWith("/") ? root : root + "/")) return true;
+        }
         return false;
     }
 
@@ -114,13 +116,16 @@ final class SearchIndexer {
             long mtime = f.lastModified();
             String name = f.getName();
             String ext = extOf(name);
-            long known = store.knownMtime(f.getPath());
-            if (known == mtime) {
-                // Unveraendert seit dem letzten Lauf - Metadaten/Inhalt nicht
-                // neu ziehen, aber ein Miniaturbild nachholen, falls diese
-                // Datei schon VOR der Vorschau-Funktion indiziert wurde
-                // (sonst bliebe sie bis zur naechsten echten Aenderung ohne
-                // Titelbild - schlechtes Erlebnis nach einem App-Update).
+            boolean wantContent = f.length() <= MAX_CONTENT_BYTES && contentWanted(f.getPath());
+            SearchStore.KnownState known = store.known(f.getPath());
+            if (known.mtime == mtime && (!wantContent || known.contentOk)) {
+                // Unveraendert seit dem letzten Lauf, UND (Inhalt entweder gar
+                // nicht gewuenscht oder schon vorhanden) - nichts neu zu tun.
+                // Ohne die zweite Bedingung wuerde ein nachtraeglich fuer
+                // diesen Ordner eingeschaltetes "Inhalt durchsuchbar machen"
+                // nie greifen, solange sich keine einzige Datei mehr aendert
+                // (bei einer stabilen Buchsammlung: nie) - Mathias' Verdacht,
+                // dass mit dem Indizieren "irgendwas nicht stimmt".
                 if (contextApp != null && !Thumbnails.exists(contextApp, f.getPath())) {
                     generateThumbSafely(contextApp, f, ext);
                 }
@@ -132,7 +137,6 @@ final class SearchIndexer {
 
             FileExtractors.Result r = new FileExtractors.Result();
             if (isSupported(ext)) { // Metadaten sind billig, immer versuchen
-                boolean wantContent = f.length() <= MAX_CONTENT_BYTES && contentWanted(f.getPath());
                 boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
                 if (!comic || searchComicsMetaCached) {
                     r = FileExtractors.extract(f, ext, wantContent);

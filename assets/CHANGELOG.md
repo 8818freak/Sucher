@@ -4,6 +4,19 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.16
+- Echten Indizier-Bug behoben: Wurde „Inhalt durchsuchbar machen" für einen
+  Ordner nachträglich eingeschaltet, blieb die Volltextsuche darin
+  trotzdem leer, solange sich keine einzige Datei mehr änderte (bei einer
+  stabilen Sammlung: nie) - der Ändern-Zeit-Vergleich übersprang bereits
+  bekannte Dateien komplett, auch wenn ihr Inhalt noch nie erfasst wurde.
+  Prüft jetzt zusätzlich, ob der Inhalt schon vorliegt.
+- Zwei verwandte Pfad-Bugs behoben: ein Ordner wie „/sd/books" erfasste
+  durch einen fehlenden Pfadtrenner beim Vergleich auch Geschwister wie
+  „/sd/books2/…" mit; ein Ordnername mit Unterstrich (z. B. „meine_bücher")
+  wurde als SQL-Platzhalter fehlinterpretiert und traf dadurch auch
+  „meineXbücher".
+
 ## 0.15
 - Zweites ANR behoben: EPUB/MOBI-Vorschau entpackte/dekomprimierte das
   ganze Buch bisher synchron in `onCreate` - bei groesseren oder reich

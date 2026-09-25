@@ -134,13 +134,23 @@ public class SearchStore extends SQLiteOpenHelper {
         }
     }
 
-    /** Bekannte Aenderungszeit einer bereits indizierten Datei, oder -1. */
-    public long knownMtime(String path) {
+    /** Bekannter Stand einer bereits indizierten Datei: Aenderungszeit
+     *  (-1, falls unbekannt) und ob ihr Inhalt bereits mitindiziert wurde. */
+    public static final class KnownState {
+        public long mtime = -1;
+        public boolean contentOk;
+    }
+
+    public KnownState known(String path) {
+        KnownState s = new KnownState();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT mtime FROM files WHERE path=?", new String[]{path});
-        long m = c.moveToFirst() ? c.getLong(0) : -1;
+                "SELECT mtime, content_ok FROM files WHERE path=?", new String[]{path});
+        if (c.moveToFirst()) {
+            s.mtime = c.getLong(0);
+            s.contentOk = c.getInt(1) != 0;
+        }
         c.close();
-        return m;
+        return s;
     }
 
     /** Alle Eintraege zu Pfaden entfernen, die beim letzten Durchlauf nicht
@@ -149,8 +159,14 @@ public class SearchStore extends SQLiteOpenHelper {
      *  runStart. */
     public void pruneStale(String rootPrefix, long runStart) {
         SQLiteDatabase db = getWritableDatabase();
-        Cursor c = db.rawQuery("SELECT path FROM files WHERE path LIKE ? AND indexed_at < ?",
-                new String[]{rootPrefix + "%", String.valueOf(runStart)});
+        // LIKE-Sonderzeichen im Ordnernamen selbst escapen (z.B. "my_books"
+        // wuerde "_" sonst als Ein-Zeichen-Platzhalter lesen und faelschlich
+        // auch "myXbooks" treffen) und eine echte Pfadgrenze erzwingen, sonst
+        // wuerde ein Wurzelordner "/sd/books" auch "/sd/books2/..." erfassen.
+        String escaped = rootPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        String pattern = (escaped.endsWith("/") ? escaped : escaped + "/") + "%";
+        Cursor c = db.rawQuery("SELECT path FROM files WHERE path LIKE ? ESCAPE '\\' AND indexed_at < ?",
+                new String[]{pattern, String.valueOf(runStart)});
         List<String> stale = new ArrayList<>();
         while (c.moveToNext()) stale.add(c.getString(0));
         c.close();
