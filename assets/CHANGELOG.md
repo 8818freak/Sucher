@@ -5,7 +5,7 @@ als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
 ## 0.19
-- Sichtbarer Indizier-Fortschritt (Mathias' Wunsch): die Einstellungen zeigen
+- Sichtbarer Indizier-Fortschritt: die Einstellungen zeigen
   jetzt zusätzlich, wie viele der infrage kommenden Dateien schon Volltext
   haben, mit Prozentanzeige - die bisherige Gesamtzahl allein bewegt sich
   kaum, sobald der Ordnerbaum einmal komplett bekannt ist, und sah darum wie
@@ -25,7 +25,7 @@ herausgelöst.
   stoppte den laufenden Scan bei `onStopJob()` nicht wirklich - der Thread lief
   unbeaufsichtigt weiter, während das System den Job nach Ablauf seines
   Zeitfensters wiederholt zwangsbeenden musste (24 Timeouts laut
-  `dumpsys jobscheduler` bei Mathias' rund 50.000-Dateien-Bibliothek nach acht
+  `dumpsys jobscheduler` bei einer rund 50.000-Dateien-Bibliothek nach acht
   Stunden mit unter 3.000 erfassten Dateien). Jeder Zwangsabbruch löste sofort
   einen Neustartversuch aus, der ins selbe Problem lief und die App zunehmend
   drosselte. Der Scan reagiert jetzt kooperativ auf das Stopp-Signal und meldet
@@ -45,9 +45,7 @@ herausgelöst.
   weitere Suche (einfach oder erweitert, auch mit völlig anderen
   Suchbegriffen/Feldern) auf genau diese Treffermenge, bis man sie über
   „Aufheben" wieder verwirft. Lässt sich mehrfach hintereinander anwenden,
-  um sich schrittweise zum gesuchten Ergebnis vorzuarbeiten (Mathias'
-  Wunsch: „innerhalb der Suchergebnisse erneut suchen, aber auch mit
-  anderen Parametern").
+  um sich schrittweise zum gesuchten Ergebnis vorzuarbeiten.
 
 ## 0.16
 - Echten Indizier-Bug behoben: Wurde „Inhalt durchsuchbar machen" für einen
