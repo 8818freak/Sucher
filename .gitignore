@@ -1,0 +1,9 @@
+build/
+*.keystore
+*.p12
+*.jks
+keystore.*
+.DS_Store
+.idea/
+*.iml
+.vscode/

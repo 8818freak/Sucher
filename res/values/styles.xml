@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dunkles Theme, angelehnt an EdgeTabs eigenes - Sucher ist ein
+         eigenstaendiger Ableger, keine EdgeTab-Karte mehr, soll aber optisch
+         als Geschwister-App erkennbar bleiben. -->
+    <style name="SucherTheme" parent="android:Theme.Material">
+        <item name="android:windowBackground">#1C1C1E</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlActivated">@color/accent</item>
+        <item name="android:colorControlNormal">@color/accent</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#B0B0B0</item>
+    </style>
+</resources>
