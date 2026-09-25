@@ -6,14 +6,16 @@ herausgelöst.
 
 ## 0.13
 - Neue Seite „Über Sucher" in den Einstellungen: Versionsnummer, Lizenztext
-  (MIT + Drittanbieter-Bibliotheken) und ein aufklappbares
-  Änderungsprotokoll (dieses Dokument, direkt in der App).
+  und ein aufklappbares Änderungsprotokoll (dieses Dokument, direkt in der
+  App).
 - Build-Fehler behoben: PDFBox-Androids Schriftart-/Glyphen-Daten
   (`assets/com/tom_roush/...`) wurden bisher nicht in die APK gepackt (fehlendes
   `-A assets` beim Bauen) - PDF-Vorschauen liefen dadurch seit der ersten
   Version ohne korrekte Schriftmetriken, ohne dass es abstürzte.
-- Quelloffene Veröffentlichung auf GitHub vorbereitet (Lizenz mit
-  Drittanbieter-Hinweisen, Build-Anleitung korrigiert).
+- Quelloffene Veröffentlichung auf GitHub vorbereitet, Lizenz: GNU General
+  Public License v3, mit Drittanbieter-Hinweisen für die gebündelten
+  Bibliotheken (Apache 2.0 / BSD-3-Clause, beide mit GPLv3 kombinierbar);
+  Build-Anleitung korrigiert.
 
 ## 0.12
 - Absturz behoben: ein interner Buch-Link (z. B. ein Eintrag im

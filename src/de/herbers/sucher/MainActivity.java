@@ -1316,13 +1316,15 @@ public class MainActivity extends Activity {
         root.addView(licTitle);
 
         TextView lic = new TextView(this);
-        lic.setText("MIT-Lizenz. Copyright (c) 2026 Mathias Herbers.\n\n"
+        lic.setText("GNU General Public License v3 (oder später). Copyright (c) 2026 "
+                + "Mathias Herbers. Vollständiger Lizenztext: LICENSE im Quellcode-"
+                + "Repository.\n\n"
                 + "Enthält Drittanbieter-Bibliotheken unter jeweils eigener "
-                + "Open-Source-Lizenz: Apache POI, PDFBox-Android, Apache Commons "
-                + "(Collections, Compress, IO, Math), Apache Log4j API und "
-                + "SparseBitSet (alle Apache License 2.0), sowie curvesapi "
-                + "(BSD-Lizenz). Volle Lizenztexte liegen den jeweiligen Bibliotheks-"
-                + "Dateien bei.");
+                + "Open-Source-Lizenz (mit der GPLv3 kombinierbar): Apache POI, "
+                + "PDFBox-Android, Apache Commons (Collections, Compress, IO, Math), "
+                + "Apache Log4j API und SparseBitSet (alle Apache License 2.0), sowie "
+                + "curvesapi (BSD-Lizenz). Volle Lizenztexte liegen den jeweiligen "
+                + "Bibliotheks-Dateien bei.");
         lic.setTextColor(Color.parseColor("#9E9E9E"));
         lic.setTextSize(12 * fs);
         root.addView(lic);
