@@ -9,6 +9,16 @@ a tab before turning out to deserve its own app (different permission
 profile, different usage pattern — open it directly, search, done, no
 always-on background service).
 
+## Screenshots
+
+<table>
+<tr>
+<td><img src="screenshots/suche.png" width="220" alt="Sucher-Startbildschirm"><br>Suche</td>
+<td><img src="screenshots/ergebnisse.png" width="220" alt="Dateisuche mit Volltext-Treffern"><br>Volltext-Treffer</td>
+<td><img src="screenshots/erweiterte-suche.png" width="220" alt="Erweiterte Suche: Autor/Titel/Buchserie/Dateityp"><br>Erweiterte Suche</td>
+</tr>
+</table>
+
 ## Format support
 
 | Format | Method | Notes |
