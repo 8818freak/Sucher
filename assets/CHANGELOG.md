@@ -4,6 +4,17 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.13
+- Neue Seite „Über Sucher" in den Einstellungen: Versionsnummer, Lizenztext
+  (MIT + Drittanbieter-Bibliotheken) und ein aufklappbares
+  Änderungsprotokoll (dieses Dokument, direkt in der App).
+- Build-Fehler behoben: PDFBox-Androids Schriftart-/Glyphen-Daten
+  (`assets/com/tom_roush/...`) wurden bisher nicht in die APK gepackt (fehlendes
+  `-A assets` beim Bauen) - PDF-Vorschauen liefen dadurch seit der ersten
+  Version ohne korrekte Schriftmetriken, ohne dass es abstürzte.
+- Quelloffene Veröffentlichung auf GitHub vorbereitet (Lizenz mit
+  Drittanbieter-Hinweisen, Build-Anleitung korrigiert).
+
 ## 0.12
 - Absturz behoben: ein interner Buch-Link (z. B. ein Eintrag im
   Inhaltsverzeichnis eines EPUB/MOBI) ließ die App abstürzen
