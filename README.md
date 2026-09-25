@@ -52,7 +52,11 @@ rm -rf build && mkdir -p build/gen build/obj
   --min-sdk-version 29 --target-sdk-version 34
 javac --release 11 -d build/obj -classpath "$AJAR:$(echo libs/*.jar | tr ' ' ':')" \
   $(find src build/gen -name '*.java')
-(cd build/obj && for j in ../../libs/*.jar; do jar xf "$j"; done && find . -name 'module-info.class' -delete)
+# module-info.class (JPMS) and META-INF/versions/ (multi-release jar classes,
+# e.g. log4j-api ships a Java 9 variant of Base64Util) both confuse d8 if left
+# in - the former isn't a real class, the latter causes "defined multiple
+# times" duplicate-class errors since d8 sees both variants unversioned.
+(cd build/obj && for j in ../../libs/*.jar; do jar xf "$j"; done && find . -name 'module-info.class' -delete && rm -rf META-INF/versions)
 "$BT/d8" --min-api 29 --lib "$AJAR" --output build/ $(find build/obj -name '*.class')
 cp build/base.apk build/unsigned.apk
 (cd build && zip -qj unsigned.apk classes*.dex)
