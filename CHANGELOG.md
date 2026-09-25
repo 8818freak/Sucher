@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.19a
+- Nur Änderungsprotokoll-Text bereinigt (keine Personenerwähnung mehr bei
+  gemeldeten Fehlern/Wünschen), keine funktionale Änderung.
+
 ## 0.19
 - Sichtbarer Indizier-Fortschritt: die Einstellungen zeigen
   jetzt zusätzlich, wie viele der infrage kommenden Dateien schon Volltext
