@@ -4,6 +4,22 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.19
+- Sichtbarer Indizier-Fortschritt (Mathias' Wunsch): die Einstellungen zeigen
+  jetzt zusätzlich, wie viele der infrage kommenden Dateien schon Volltext
+  haben, mit Prozentanzeige - die bisherige Gesamtzahl allein bewegt sich
+  kaum, sobald der Ordnerbaum einmal komplett bekannt ist, und sah darum wie
+  Stillstand aus. Während eines laufenden Durchlaufs aktualisiert sich die
+  Anzeige jetzt außerdem von selbst jede Sekunde (vorher nur bei eigener
+  Aktion), inklusive des Pfads der gerade verarbeiteten Datei.
+- Echten Geschwindigkeits-Bug gefunden und behoben, dank dieser neuen
+  Anzeige: Formate, die grundsätzlich nie Volltext bekommen können (Fotos,
+  Musik, Videos, APKs - die Mehrheit der Dateien auf jedem Gerät), wurden
+  durch den in 0.16 eingeführten Schnell-Überspringen-Fix versehentlich bei
+  JEDEM Lauf komplett neu verarbeitet statt übersprungen. Erklärt sowohl die
+  große Diskrepanz zwischen von einem Dateimanager gemeldeter Gesamtzahl und
+  Sucher's Zähler, als auch einen Großteil der Verlangsamung.
+
 ## 0.18
 - Massives Indizier-Problem behoben: der Hintergrund-Abgleich (IndexJobService)
   stoppte den laufenden Scan bei `onStopJob()` nicht wirklich - der Thread lief

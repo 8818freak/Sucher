@@ -433,6 +433,33 @@ public class SearchStore extends SQLiteOpenHelper {
         return n;
     }
 
+    /** Wie viele der bekannten Dateien schon Volltext haben (content_ok=1) -
+     *  bei aktivierter Inhalts-Indizierung die eigentlich aussagekraeftige
+     *  Fortschrittszahl, da indexedCount() nur "bekannt", nicht "mit
+     *  Inhalt erfasst" zaehlt (Mathias' Wunsch nach sichtbarem Fortschritt -
+     *  gerade bei einem grossen Nachhol-Durchlauf bewegt sich sonst nur
+     *  diese Zahl, nicht die Gesamtzahl). Nur unter den Dateiarten gezaehlt,
+     *  fuer die ueberhaupt Inhalt extrahiert werden koennte (siehe
+     *  SearchIndexer.isSupported), sonst waere die "Gesamtzahl" durch
+     *  Fotos/Videos/APKs etc. kuenstlich aufgeblaeht. */
+    public int contentIndexedCount() {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM files WHERE content_ok=1", null);
+        int n = c.moveToFirst() ? c.getInt(0) : 0;
+        c.close();
+        return n;
+    }
+
+    public int contentEligibleCount() {
+        String[] exts = SearchIndexer.SUPPORTED_EXTS;
+        String placeholders = String.join(",", java.util.Collections.nCopies(exts.length, "?"));
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM files WHERE ext IN (" + placeholders + ")", exts);
+        int n = c.moveToFirst() ? c.getInt(0) : 0;
+        c.close();
+        return n;
+    }
+
     public void clearAll() {
         SQLiteDatabase db = getWritableDatabase();
         db.delete("files", null, null);

@@ -141,6 +141,36 @@ public class MainActivity extends Activity {
         IndexJobService.ensureScheduled(this);
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        stopIndexTicker();
+    }
+
+    // Aktualisiert die Fortschrittsanzeige in den Einstellungen waehrend
+    // eines laufenden Indizierlaufs von selbst weiter (nicht nur bei einer
+    // Nutzeraktion) - sonst wirkte ein aktiver, aber langsamer Lauf wie
+    // Stillstand (Mathias: "das aendert nichts an den Anzeigen"). Nur aktiv,
+    // waehrend die Einstellungen sichtbar UND tatsaechlich indiziert wird -
+    // pausiert/stoppt sich also von selbst, sobald beides nicht mehr gilt.
+    // rebuild() selbst ruft startIndexTicker() am Ende erneut auf (statt der
+    // Tick-Callback sich selbst nachzuplanen) - so heilt sich die Kette bei
+    // JEDEM rebuild() von selbst, auch nach einem Wechsel Suche<->
+    // Einstellungen zwischendurch, der sie sonst lautlos abriss (beobachtet:
+    // Anzeige blieb bei "402" stehen, obwohl im Hintergrund laengst 3075
+    // Dateien durch waren).
+    private final Handler indexTicker = new Handler(Looper.getMainLooper());
+    private final Runnable indexTick = this::rebuild;
+
+    private void startIndexTicker() {
+        indexTicker.removeCallbacks(indexTick);
+        if (showSettings && SearchIndexer.isRunning()) indexTicker.postDelayed(indexTick, 1000);
+    }
+
+    private void stopIndexTicker() {
+        indexTicker.removeCallbacks(indexTick);
+    }
+
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
     // ---------- Kopfzeile + Umschaltung Suche/Einstellungen ----------
@@ -178,6 +208,7 @@ public class MainActivity extends Activity {
             pendingScrollY = -1;
             scroll.post(() -> scroll.scrollTo(0, y));
         }
+        startIndexTicker();
     }
 
     // ---------- Suche ----------
@@ -1316,7 +1347,9 @@ public class MainActivity extends Activity {
         root.addView(comicCb);
 
         section(root, "Index", d);
-        int count = SearchStore.get(this).indexedCount();
+        boolean running = SearchIndexer.isRunning();
+        SearchStore idxStore = SearchStore.get(this);
+        int count = idxStore.indexedCount();
         long last = Settings.searchLastRun(this);
         TextView status = new TextView(this);
         status.setText(last == 0 ? (count + " Dateien indiziert.")
@@ -1324,11 +1357,44 @@ public class MainActivity extends Activity {
                   + DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS));
         status.setTextColor(Color.GRAY);
         status.setTextSize(12 * fs);
-        status.setPadding(0, 0, 0, 6 * d);
+        status.setPadding(0, 0, 0, 2 * d);
         root.addView(status);
 
+        // Fortschritt fuer die eigentlich teure Arbeit: "count" oben zaehlt
+        // nur bekannte Dateien (bewegt sich kaum, sobald der Baum einmal
+        // durchlaufen ist) - wie viel davon schon VOLLTEXT hat, ist die Zahl,
+        // die sich waehrend eines (Nachhol-)Laufs wirklich veraendert. Ohne
+        // das sah ein aktiver, aber langsamer Lauf wie Stillstand aus
+        // (Mathias: "das ändert nichts an den Anzeigen").
+        int contentDone = idxStore.contentIndexedCount();
+        int contentTotal = idxStore.contentEligibleCount();
+        TextView contentStatus = new TextView(this);
+        String pct = contentTotal > 0 ? " (" + Math.round(100f * contentDone / contentTotal) + " %)" : "";
+        contentStatus.setText("davon " + contentDone + " von " + contentTotal
+                + " infrage kommenden Dateien mit Volltext" + pct);
+        contentStatus.setTextColor(Color.parseColor("#8899AA"));
+        contentStatus.setTextSize(12 * fs);
+        contentStatus.setPadding(0, 0, 0, 6 * d);
+        root.addView(contentStatus);
+
+        if (running) {
+            TextView live = new TextView(this);
+            live.setText("Läuft gerade: " + SearchIndexer.scanned + " geprüft, "
+                    + SearchIndexer.contentIndexed + " davon mit neuem Volltext in diesem Durchlauf");
+            live.setTextColor(Color.parseColor("#2E9BE6"));
+            live.setTextSize(12 * fs);
+            live.setPadding(0, 0, 0, 2 * d);
+            root.addView(live);
+
+            TextView currentFile = new TextView(this);
+            currentFile.setText("Gerade dran: " + SearchIndexer.currentPath);
+            currentFile.setTextColor(Color.parseColor("#8899AA"));
+            currentFile.setTextSize(11 * fs);
+            currentFile.setPadding(0, 0, 0, 6 * d);
+            root.addView(currentFile);
+        }
+
         Button reindex = new Button(this);
-        boolean running = SearchIndexer.isRunning();
         reindex.setText(running ? "Indiziert… (" + SearchIndexer.scanned + ")" : "Jetzt neu indizieren");
         reindex.setEnabled(!running && !folders.isEmpty());
         reindex.setOnClickListener(v -> {

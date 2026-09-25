@@ -139,7 +139,16 @@ final class SearchIndexer {
             long mtime = f.lastModified();
             String name = f.getName();
             String ext = extOf(name);
-            boolean wantContent = f.length() <= MAX_CONTENT_BYTES && contentWanted(f.getPath());
+            // isSupported() zuerst: fuer ein Format, das ohnehin nie Inhalt
+            // liefern kann (Fotos, Musik, Videos, APKs - die Mehrheit der
+            // Dateien auf jedem Geraet), darf "content_ok" in der DB (bleibt
+            // dort fuer immer 0) den Schnell-Ueberspringen-Pfad nicht
+            // blockieren - sonst wuerde JEDE nicht-Dokument-Datei bei JEDEM
+            // Lauf komplett neu verarbeitet, nie uebersprungen (gefunden, weil
+            // ein Lauf reproduzierbar bei einer .mp3 haengen blieb: die lief
+            // immer wieder in den teuren Pfad, obwohl laengst "fertig").
+            boolean wantContent = isSupported(ext) && f.length() <= MAX_CONTENT_BYTES
+                    && contentWanted(f.getPath());
             SearchStore.KnownState known = store.known(f.getPath());
             if (known.mtime == mtime && (!wantContent || known.contentOk)) {
                 // Unveraendert seit dem letzten Lauf, UND (Inhalt entweder gar
@@ -207,19 +216,18 @@ final class SearchIndexer {
         return i < 0 ? "" : name.substring(i + 1).toLowerCase(Locale.ROOT);
     }
 
+    // Auch von SearchStore.contentEligibleCount() genutzt (Fortschritts-
+    // Prozentanzeige) - eine einzige Quelle statt einer zweiten, leicht
+    // auseinanderlaufenden Kopie dieser Liste.
+    static final String[] SUPPORTED_EXTS = {
+            "txt", "md", "markdown", "csv", "log", "json", "xml", "srt", "ini", "yaml", "yml",
+            "docx", "xlsx", "pptx", "doc", "xls", "ppt", "epub", "fb2",
+            "mobi", "azw", "azw3", "prc", "pdf", "cbz", "cbr"
+    };
+    private static final java.util.Set<String> SUPPORTED_EXT_SET =
+            new java.util.HashSet<>(java.util.Arrays.asList(SUPPORTED_EXTS));
+
     private static boolean isSupported(String ext) {
-        switch (ext) {
-            case "txt": case "md": case "markdown": case "csv": case "log": case "json":
-            case "xml": case "srt": case "ini": case "yaml": case "yml":
-            case "docx": case "xlsx": case "pptx":
-            case "doc": case "xls": case "ppt":
-            case "epub": case "fb2":
-            case "mobi": case "azw": case "azw3": case "prc":
-            case "pdf":
-            case "cbz": case "cbr":
-                return true;
-            default:
-                return false;
-        }
+        return SUPPORTED_EXT_SET.contains(ext);
     }
 }
