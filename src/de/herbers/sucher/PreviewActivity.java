@@ -81,6 +81,52 @@ public class PreviewActivity extends Activity {
         root.setBackgroundColor(Color.parseColor("#1C1C1E"));
 
         File f = path != null ? new File(path) : null;
+        boolean isEpub = "epub".equals(ext);
+        boolean isMobiFamily = "mobi".equals(ext) || "azw".equals(ext) || "azw3".equals(ext) || "prc".equals(ext);
+
+        if (f != null && f.isFile() && (isEpub || isMobiFamily)) {
+            // EPUB/MOBI brauchen vorab teure, rein dateibasierte Arbeit
+            // (EPUB: das ganze Archiv einmalig entpacken; MOBI: PalmDOC/MOBI6-
+            // Dekompression, ohne eigenen Cache, jedes Mal neu) - das lief
+            // bisher synchron in onCreate und konnte bei groesseren/reich
+            // bebilderten Buechern den Hauptthread lange genug blockieren,
+            // um ein "App reagiert nicht" auszuloesen (beobachtet mit einem
+            // 45-Kapitel-Buch). Jetzt: sofort einen Platzhalter zeigen, die
+            // teure Arbeit in einem Hintergrund-Thread erledigen, und erst
+            // die eigentliche Ansicht (inkl. WebView - die MUSS auf dem
+            // Hauptthread erzeugt werden) danach auf dem Hauptthread bauen.
+            root.addView(message("Wird geladen…"), new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+            setContentView(root);
+            new Thread(() -> {
+                Object prepared = null;
+                Throwable err = null;
+                try {
+                    prepared = isEpub ? prepareEpub(f) : MobiExtractor.loadPreview(f);
+                } catch (Throwable t) {
+                    err = t;
+                }
+                Object finalPrepared = prepared;
+                Throwable finalErr = err;
+                runOnUiThread(() -> {
+                    View content;
+                    try {
+                        if (finalErr != null) throw finalErr;
+                        content = isEpub ? epubReader((EpubBook) finalPrepared)
+                                         : mobiReader((MobiExtractor.PreviewResult) finalPrepared);
+                    } catch (Throwable t) {
+                        android.util.Log.w("EdgeTabSearch", "Vorschau fehlgeschlagen: " + path, t);
+                        content = errorView();
+                    }
+                    root.removeAllViews();
+                    root.addView(content, new FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+                    root.addView(closeButton());
+                });
+            }).start();
+            return;
+        }
+
         View content;
         try {
             content = f == null || !f.isFile() ? notFoundView() : buildFor(f, ext, contentOk);
@@ -170,10 +216,9 @@ public class PreviewActivity extends Activity {
                 return pdfPager(f);
             case "cbz":
                 return comicPager(f);
-            case "epub":
-                return epubReader(f);
-            case "mobi": case "azw": case "azw3": case "prc":
-                return mobiReader(f);
+            // epub/mobi/azw/azw3/prc: behandelt onCreate() vorab asynchron
+            // (siehe dort) - brauchen teure Vorarbeit vor der eigentlichen
+            // Ansicht, landen darum nie in dieser Weiche.
             case "docx": case "xlsx": case "pptx": case "doc": case "xls": case "ppt":
                 return officeFallback(f);
             case "txt": case "md": case "markdown": case "csv": case "log": case "json":
@@ -240,8 +285,7 @@ public class PreviewActivity extends Activity {
         File dir; String opfDir; List<String> spine = new ArrayList<>();
     }
 
-    private View epubReader(File f) throws Exception {
-        EpubBook book = prepareEpub(f);
+    private View epubReader(EpubBook book) {
         if (book == null || book.spine.isEmpty()) return message("Dieses E-Book konnte nicht geöffnet werden.");
 
         LinearLayout box = new LinearLayout(this);
@@ -469,8 +513,7 @@ public class PreviewActivity extends Activity {
 
     // ---------- MOBI/AZW3 ----------
 
-    private View mobiReader(File f) {
-        MobiExtractor.PreviewResult pr = MobiExtractor.loadPreview(f);
+    private View mobiReader(MobiExtractor.PreviewResult pr) {
         if (pr.drm) return message("Kopiergeschütztes E-Book – keine Vorschau möglich.");
         if (pr.unsupportedCompression) return message("Dieses E-Book nutzt ein Kompressionsverfahren, das (noch) nicht unterstützt wird.");
         if (pr.html == null || pr.html.trim().isEmpty()) return message("Kein Inhalt gefunden.");

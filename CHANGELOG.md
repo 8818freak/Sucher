@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.15
+- Zweites ANR behoben: EPUB/MOBI-Vorschau entpackte/dekomprimierte das
+  ganze Buch bisher synchron in `onCreate` - bei groesseren oder reich
+  bebilderten Buechern (beobachtet mit einem 45-Kapitel-Buch) konnte das
+  den Hauptthread lange genug blockieren fuer ein "App reagiert nicht".
+  Läuft jetzt in einem Hintergrund-Thread; die eigentliche Ansicht (inkl.
+  WebView) wird danach auf dem Hauptthread gebaut, mit "Wird geladen…"
+  als kurzem Platzhalter dazwischen.
+
 ## 0.14
 - Absturz-nahes Einfrieren behoben ("reagiert nicht"/ANR): eine eintreffende
   Benachrichtigung wurde direkt auf dem Hauptthread in die Datenbank
