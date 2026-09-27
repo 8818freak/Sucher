@@ -4,6 +4,27 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.21
+- Neu: Sichern/Wiederherstellen (Einstellungen → Sicherung) - sichert
+  Einstellungen UND den kompletten Suchindex (alle bereits erfassten
+  Volltexte) als eine Datei, statt einer Neuinstallation die stundenlange
+  Ersterfassung wieder aufzubuerden. Laeuft im Hintergrund (blockiert die
+  Bedienung nicht), Datenbank-Datei wird unkomprimiert gespeichert (bei
+  einem grossen Index sonst mehrere Minuten CPU-Last allein fuers
+  Komprimieren, bei kaum kleinerem Ergebnis).
+- Nachtrag zu 0.20: die dort vermutete Pfad-Alias-Rekursion war (zumindest
+  in einem beobachteten Fall) NICHT die Ursache eines weiterhin
+  auftretenden Haengers (keine Symlinks im durchsuchten Baum gefunden,
+  Verschachtelungs-Grenze griff nicht). Wahrscheinlicher: die
+  "Zugriff auf alle Dateien"-Berechtigung war zwischenzeitlich in einen
+  inkonsistenten Systemzustand geraten (AppOps zeigte "allow", die
+  Paketverwaltung "granted=false") - ohne diese Berechtigung faellt
+  Dateizugriff auf Androids deutlich langsameren FUSE-Kompatibilitaetspfad
+  zurueck, was bei einer sehr grossen Ordnerstruktur wie einem
+  Haengenbleiben aussehen kann. Zur Absicherung zusaetzlich: eine
+  Diagnose-Protokollierung (Logcat-Tag "EdgeTabSearchDiag"), falls es
+  erneut auftritt.
+
 ## 0.20
 - Fix: ein Indizierlauf konnte auf manchen Geräten/ROMs unbegrenzt in einer
   Ordner-Rekursion feststecken (vermutlich ein Pfad-Alias, den

@@ -126,4 +126,79 @@ public final class Settings {
     public static void clearSearchHistory(Context c) {
         p(c).edit().remove(K_SEARCH_HISTORY).apply();
     }
+
+    // ---- Sicherung/Wiederherstellen ---------------------------------------
+    // Generischer Dump/Restore der GESAMTEN sucher_settings-Datei (nicht nur
+    // der Felder in dieser Klasse) - deckt automatisch auch kuenftig
+    // hinzukommende Einstellungen mit ab. Der eigentliche Suchindex
+    // (SearchStore/edgetab_search.db) ist NICHT hier drin, sondern wird
+    // separat als Datei mitgesichert (siehe Backup.java).
+    private static final String BACKUP_HEADER = "Sucher-Backup 1";
+
+    public static String exportText(Context c) {
+        StringBuilder sb = new StringBuilder(BACKUP_HEADER).append('\n');
+        for (java.util.Map.Entry<String, ?> e : p(c).getAll().entrySet()) {
+            String key = e.getKey();
+            Object v = e.getValue();
+            if (v instanceof String) {
+                sb.append("s").append(key).append('').append(b64((String) v)).append('\n');
+            } else if (v instanceof Boolean) {
+                sb.append("b").append(key).append('').append(v).append('\n');
+            } else if (v instanceof Integer) {
+                sb.append("i").append(key).append('').append(v).append('\n');
+            } else if (v instanceof Long) {
+                sb.append("l").append(key).append('').append(v).append('\n');
+            } else if (v instanceof Float) {
+                sb.append("f").append(key).append('').append(v).append('\n');
+            } else if (v instanceof Set) {
+                StringBuilder joined = new StringBuilder();
+                for (Object s : (Set<?>) v) joined.append(String.valueOf(s)).append('');
+                sb.append("x").append(key).append('').append(b64(joined.toString())).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Ersetzt ALLE aktuellen Einstellungen durch den Inhalt einer Sicherung.
+     *  Liefert false bei erkennbar falschem/beschaedigtem Format, ohne etwas
+     *  zu aendern. */
+    public static boolean importText(Context c, String text) {
+        if (text == null || !text.startsWith(BACKUP_HEADER)) return false;
+        SharedPreferences.Editor ed = p(c).edit().clear();
+        try {
+            for (String line : text.split("\n", -1)) {
+                if (line.isEmpty()) continue;
+                String[] f = line.split("", -1);
+                if (f.length < 3) continue;
+                String type = f[0], key = f[1], val = f[2];
+                switch (type) {
+                    case "s": ed.putString(key, unb64(val)); break;
+                    case "b": ed.putBoolean(key, Boolean.parseBoolean(val)); break;
+                    case "i": ed.putInt(key, Integer.parseInt(val)); break;
+                    case "l": ed.putLong(key, Long.parseLong(val)); break;
+                    case "f": ed.putFloat(key, Float.parseFloat(val)); break;
+                    case "x":
+                        String joined = unb64(val);
+                        Set<String> set = new HashSet<>();
+                        for (String part : joined.split("", -1)) if (!part.isEmpty()) set.add(part);
+                        ed.putStringSet(key, set);
+                        break;
+                    default: break;
+                }
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        ed.apply();
+        return true;
+    }
+
+    private static String b64(String s) {
+        return android.util.Base64.encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                android.util.Base64.NO_WRAP);
+    }
+    private static String unb64(String s) {
+        return new String(android.util.Base64.decode(s, android.util.Base64.NO_WRAP),
+                java.nio.charset.StandardCharsets.UTF_8);
+    }
 }

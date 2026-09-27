@@ -74,6 +74,14 @@ public class MainActivity extends Activity {
     private static List<String> scopePaths = null;
 
     private static final int REQ_PIM = 501;
+    private static final int REQ_BACKUP_EXPORT = 502;
+    private static final int REQ_BACKUP_IMPORT = 503;
+
+    /** Wo Datensicherungen gesammelt werden, bevor sie auf einen eigenen
+     *  Server geladen werden - als Startordner vorschlagen, wenn der Datei-
+     *  Picker das unterstuetzt (rein optional, faellt still zurueck). */
+    private static final Uri DASIS_FOLDER =
+            Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADaSis");
 
     private boolean showSettings = false;
     private boolean folderPicking = false;
@@ -1256,6 +1264,62 @@ public class MainActivity extends Activity {
         if (code == REQ_PIM) rebuild();
     }
 
+    // Waehrend Sichern/Wiederherstellen laeuft (kann bei einem grossen Index
+    // etliche Sekunden dauern - Kopieren/Entpacken der Datenbank-Datei auf
+    // dem Hauptthread wuerde die App fuer diese ganze Zeit einfrieren, siehe
+    // Backup.java). Blockiert den "Sichern…"/"Wiederherstellen…"-Bereich
+    // waehrenddessen gegen Doppel-Ausloesen.
+    private static volatile boolean backupRunning = false;
+
+    @Override
+    protected void onActivityResult(int req, int result, Intent data) {
+        super.onActivityResult(req, result, data);
+        if (result != RESULT_OK || data == null || data.getData() == null) return;
+        if (req == REQ_BACKUP_EXPORT) {
+            Uri uri = data.getData();
+            backupRunning = true;
+            rebuild();
+            Handler main = new Handler(Looper.getMainLooper());
+            new Thread(() -> {
+                boolean ok = true;
+                try (java.io.OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    Backup.exportZip(this, out);
+                } catch (Exception e) {
+                    ok = false;
+                }
+                boolean finalOk = ok;
+                main.post(() -> {
+                    backupRunning = false;
+                    android.widget.Toast.makeText(this,
+                            finalOk ? "Gesichert." : "Sicherung fehlgeschlagen.",
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    rebuild();
+                });
+            }, "SucherBackupExport").start();
+        } else if (req == REQ_BACKUP_IMPORT) {
+            Uri uri = data.getData();
+            backupRunning = true;
+            rebuild();
+            Handler main = new Handler(Looper.getMainLooper());
+            new Thread(() -> {
+                boolean ok;
+                try (java.io.InputStream in = getContentResolver().openInputStream(uri)) {
+                    ok = in != null && Backup.importZip(this, in);
+                } catch (Exception e) {
+                    ok = false;
+                }
+                boolean finalOk = ok;
+                main.post(() -> {
+                    backupRunning = false;
+                    android.widget.Toast.makeText(this,
+                            finalOk ? "Wiederhergestellt." : "Datei nicht lesbar oder kein gültiges Sucher-Sicherungsformat.",
+                            android.widget.Toast.LENGTH_LONG).show();
+                    rebuild();
+                });
+            }, "SucherBackupImport").start();
+        }
+    }
+
     // ---------- Einstellungen (Ordnerauswahl, Comic-Metadaten, Index) ----------
 
     private void buildSettings(LinearLayout root, int d) {
@@ -1424,6 +1488,48 @@ public class MainActivity extends Activity {
             IndexJobService.ensureScheduled(this);
         });
         root.addView(autoCb);
+
+        section(root, "Sicherung", d);
+        TextView backupDesc = new TextView(this);
+        backupDesc.setText("Einstellungen UND den kompletten Suchindex (alle bereits erfassten Volltexte) als Datei sichern oder aus einer solchen Datei wiederherstellen (ersetzt dabei den kompletten aktuellen Stand).");
+        backupDesc.setTextColor(Color.parseColor("#8899AA"));
+        backupDesc.setTextSize(12 * fs);
+        backupDesc.setPadding(0, 0, 0, 8 * d);
+        root.addView(backupDesc);
+        if (backupRunning) {
+            TextView backupRunningLabel = new TextView(this);
+            backupRunningLabel.setText("Läuft noch … (bei einem großen Index kann das etwas dauern)");
+            backupRunningLabel.setTextColor(Color.parseColor("#2E9BE6"));
+            backupRunningLabel.setTextSize(12 * fs);
+            backupRunningLabel.setPadding(0, 0, 0, 8 * d);
+            root.addView(backupRunningLabel);
+        }
+        LinearLayout backupRow = new LinearLayout(this);
+        backupRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button exportBtn = new Button(this);
+        exportBtn.setText("Sichern…");
+        exportBtn.setEnabled(!backupRunning);
+        exportBtn.setOnClickListener(v -> {
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/zip");
+            i.putExtra(Intent.EXTRA_TITLE, "sucher-sicherung.zip");
+            i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, DASIS_FOLDER);
+            startActivityForResult(i, REQ_BACKUP_EXPORT);
+        });
+        backupRow.addView(exportBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button importBtn = new Button(this);
+        importBtn.setText("Wiederherstellen…");
+        importBtn.setEnabled(!backupRunning);
+        importBtn.setOnClickListener(v -> {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("application/zip");
+            i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, DASIS_FOLDER);
+            startActivityForResult(i, REQ_BACKUP_IMPORT);
+        });
+        backupRow.addView(importBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(backupRow);
 
         buildAboutSection(root, d);
     }

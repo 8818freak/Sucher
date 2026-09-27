@@ -119,7 +119,19 @@ final class SearchIndexer {
     // sinnvolle Ordnerstruktur ist weit flacher als das.
     private static final int MAX_DEPTH = 40;
 
+    // Nur voruebergehende Diagnose (siehe Log-Tag "EdgeTabSearchDiag") fuer
+    // den bislang nicht sicher root-verursachten CPU-/Akku-Haenger: loggt
+    // jeden 2000. walk()-Aufruf mit Tiefe/Pfad, damit ein naechstes
+    // Auftreten per logcat tatsaechlich zeigt, WO die Rekursion feststeckt,
+    // statt weiter zu raten. Wieder entfernen, sobald die Ursache klar ist.
+    private static int walkCallCounter = 0;
+
     private static void walk(SearchStore store, File dir, int depth) {
+        int n = ++walkCallCounter;
+        if (n % 2000 == 0) {
+            android.util.Log.d("EdgeTabSearchDiag", "walk #" + n + " depth=" + depth
+                    + " visitedSize=" + visitedCanonical.size() + " dir=" + dir);
+        }
         if (depth > MAX_DEPTH) {
             android.util.Log.w("EdgeTabSearch", "Abbruch: Ordner zu tief verschachtelt (moeglicher Pfad-Alias-Ring): " + dir);
             return;
@@ -130,6 +142,9 @@ final class SearchIndexer {
 
         File[] children = dir.listFiles();
         if (children == null) return;
+        if (children.length > 5000) {
+            android.util.Log.d("EdgeTabSearchDiag", "grosser Ordner: " + children.length + " Eintraege in " + dir);
+        }
         for (File f : children) {
             if (stopRequested) return;
             if (f.isDirectory()) {

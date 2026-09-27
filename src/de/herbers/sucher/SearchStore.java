@@ -6,6 +6,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -25,6 +26,26 @@ public class SearchStore extends SQLiteOpenHelper {
     public static synchronized SearchStore get(Context ctx) {
         if (instance == null) instance = new SearchStore(ctx.getApplicationContext());
         return instance;
+    }
+
+    /** Datei des Index auf der Platte - fuer Sichern/Wiederherstellen
+     *  (Backup.java kopiert diese Datei direkt, statt jede Zeile einzeln zu
+     *  exportieren). */
+    public static File dbFile(Context ctx) {
+        return ctx.getApplicationContext().getDatabasePath(DB);
+    }
+
+    /** Schliesst eine offene Instanz (falls vorhanden) und checkpointet WAL
+     *  vorher komplett in die Hauptdatei, damit eine Kopie/ein Ersetzen der
+     *  Datei konsistent ist. Die naechste get()-Anfrage oeffnet automatisch
+     *  neu. Fuer Sichern (Kopie muss vollstaendig sein) UND Wiederherstellen
+     *  (Datei darf nicht gerade offen sein, wenn sie ersetzt wird). */
+    public static synchronized void closeForBackup() {
+        if (instance != null) {
+            try { instance.getWritableDatabase().execSQL("PRAGMA wal_checkpoint(FULL)"); } catch (Exception ignored) {}
+            instance.close();
+            instance = null;
+        }
     }
 
     private SearchStore(Context ctx) {
