@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.20
+- Fix: ein Indizierlauf konnte auf manchen Geräten/ROMs unbegrenzt in einer
+  Ordner-Rekursion feststecken (vermutlich ein Pfad-Alias, den
+  getCanonicalPath() nicht auf denselben String abbildet, wie
+  /storage/emulated/0 vs. /storage/self/primary) - dauerhaft hohe CPU-Last
+  und Akkuverbrauch, ohne je eine Datei fertig zu bearbeiten. Eine harte
+  Verschachtelungs-Grenze bricht so einen Lauf jetzt ab.
+- Neu: "Jetzt neu indizieren" wird waehrend eines laufenden Durchlaufs zu
+  "Stoppen" - bricht ihn kooperativ ab, ohne die App beenden zu muessen.
+  Ein erneuter Start danach setzt dank des Aenderungszeit-Abgleichs faktisch
+  dort fort, wo abgebrochen wurde.
+
 ## 0.19a
 - Nur Änderungsprotokoll-Text bereinigt (keine Personenerwähnung mehr bei
   gemeldeten Fehlern/Wünschen), keine funktionale Änderung.

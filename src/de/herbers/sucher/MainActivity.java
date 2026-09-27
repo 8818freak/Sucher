@@ -1395,13 +1395,23 @@ public class MainActivity extends Activity {
         }
 
         Button reindex = new Button(this);
-        reindex.setText(running ? "Indiziert… (" + SearchIndexer.scanned + ")" : "Jetzt neu indizieren");
-        reindex.setEnabled(!running && !folders.isEmpty());
-        reindex.setOnClickListener(v -> {
-            PdfExtractorHelper.init(getApplicationContext());
-            SearchIndexer.start(this, this::rebuild);
-            rebuild();
-        });
+        if (running) {
+            // Ein gestoppter Lauf hinterlaesst dank mtime-Abgleich nie einen
+            // kaputten Zwischenstand (siehe SearchIndexer) - "Jetzt neu
+            // indizieren" nach dem Stopp macht faktisch ein "Fortsetzen":
+            // bereits erfasste, unveraenderte Dateien werden uebersprungen.
+            reindex.setText("Stoppen (" + SearchIndexer.scanned + " geprüft)");
+            reindex.setEnabled(true);
+            reindex.setOnClickListener(v -> { SearchIndexer.requestStop(); rebuild(); });
+        } else {
+            reindex.setText("Jetzt neu indizieren");
+            reindex.setEnabled(!folders.isEmpty());
+            reindex.setOnClickListener(v -> {
+                PdfExtractorHelper.init(getApplicationContext());
+                SearchIndexer.start(this, this::rebuild);
+                rebuild();
+            });
+        }
         root.addView(reindex);
 
         CheckBox autoCb = new CheckBox(this);

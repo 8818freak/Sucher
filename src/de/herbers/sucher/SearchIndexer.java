@@ -83,7 +83,7 @@ final class SearchIndexer {
                 for (String root : folders) {
                     if (stopRequested) break;
                     File rootDir = new File(root);
-                    if (rootDir.isDirectory()) walk(store, rootDir);
+                    if (rootDir.isDirectory()) walk(store, rootDir, 0);
                     // Nur als vollstaendig behandeln (und Verschwundenes
                     // entfernen), wenn der Ordner nicht durch einen Stopp
                     // mittendrin abgebrochen wurde - sonst wuerden noch
@@ -108,7 +108,22 @@ final class SearchIndexer {
     // schlimmsten Fall, je nach ROM, sogar in einer echten Schleife haengen).
     private static final java.util.Set<String> visitedCanonical = new java.util.HashSet<>();
 
-    private static void walk(SearchStore store, File dir) {
+    // Harte Grenze GEGEN den Fall, dass getCanonicalPath() zwei verschiedene
+    // Pfade zum selben echten Ort NICHT auf denselben String abbildet (auf
+    // Androids FUSE-Speicher beobachtet: /storage/emulated/0 vs.
+    // /storage/self/primary vs. /sdcard koennen je nach ROM uneinheitlich
+    // aufgeloest werden) - dann greift visitedCanonical NICHT, und ein
+    // Alias-Ring wuerde sonst unbemerkt endlos rekursieren (beobachtet:
+    // Sucher lief tagelang mit hoher CPU-Last fest, "gerade dran" zeigte nie
+    // eine Datei - die Rekursion kam nie bis zu einer Datei durch). Jede real
+    // sinnvolle Ordnerstruktur ist weit flacher als das.
+    private static final int MAX_DEPTH = 40;
+
+    private static void walk(SearchStore store, File dir, int depth) {
+        if (depth > MAX_DEPTH) {
+            android.util.Log.w("EdgeTabSearch", "Abbruch: Ordner zu tief verschachtelt (moeglicher Pfad-Alias-Ring): " + dir);
+            return;
+        }
         String canon;
         try { canon = dir.getCanonicalPath(); } catch (Exception e) { canon = dir.getAbsolutePath(); }
         if (!visitedCanonical.add(canon)) return;
@@ -119,7 +134,7 @@ final class SearchIndexer {
             if (stopRequested) return;
             if (f.isDirectory()) {
                 if (f.isHidden() || f.getName().startsWith(".")) continue; // .thumbnails, .trash etc.
-                walk(store, f);
+                walk(store, f, depth + 1);
             } else {
                 indexOne(store, f);
             }
