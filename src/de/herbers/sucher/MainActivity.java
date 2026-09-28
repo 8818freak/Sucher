@@ -1392,8 +1392,26 @@ public class MainActivity extends Activity {
         if (folderPicking) {
             root.addView(folderBrowser(d));
         } else {
+            // Ein-Tipp: den gesamten internen Speicher (/storage/emulated/0)
+            // hinzufuegen, ohne sich durch den Ordner-Browser klicken zu
+            // muessen - deckt den haeufigsten Fall ("alles durchsuchen") direkt
+            // ab und umgeht, dass die oberste Ebene im Browser nicht als "diesen
+            // Ordner nehmen" waehlbar war.
+            String internal = Environment.getExternalStorageDirectory().getAbsolutePath();
+            if (!Settings.searchFolders(this).contains(internal)) {
+                Button addInternal = new Button(this);
+                addInternal.setText("Internen Speicher durchsuchen");
+                addInternal.setOnClickListener(v -> {
+                    Settings.addSearchFolder(this, internal);
+                    IndexJobService.ensureScheduled(this);
+                    folderPicking = false;
+                    rebuild();
+                });
+                root.addView(addInternal);
+            }
+
             Button add = new Button(this);
-            add.setText("+ Ordner hinzufügen");
+            add.setText("+ Anderen Ordner hinzufügen");
             add.setOnClickListener(v -> {
                 folderPicking = true;
                 if (browsePath == null) browsePath = Environment.getExternalStorageDirectory().getAbsolutePath();

@@ -99,10 +99,19 @@ final class SearchIndexer {
                         + (skipContentCached.isEmpty() ? "" : " (" + skipContentCached.size()
                         + " Datei(en) auf der Überspringen-Liste)"));
                 visitedCanonical.clear();
-                java.util.List<String> folders = new java.util.ArrayList<>(Settings.searchFolders(app));
+                // Nicht lesbare Wurzelordner auf den zugänglichen internen
+                // Speicher abbilden: "/storage/emulated" (bzw. "/storage")
+                // selbst kann eine App nicht auflisten - gemeint ist praktisch
+                // immer "/storage/emulated/0". So funktioniert eine bestehende
+                // (im mageren Ordner-Picker gewählte) Einstellung von selbst,
+                // und der vorhandene Index wird per mtime wiederverwendet.
+                java.util.Collection<String> stored = Settings.searchFolders(app);
+                java.util.List<String> folders = new java.util.ArrayList<>();
                 contentRootsCached = new java.util.ArrayList<>();
-                for (String cf : folders) {
-                    if (Settings.contentIndexingEnabled(app, cf)) contentRootsCached.add(cf);
+                for (String cf : stored) {
+                    String norm = normalizeRoot(cf);
+                    folders.add(norm);
+                    if (Settings.contentIndexingEnabled(app, cf)) contentRootsCached.add(norm);
                 }
                 for (String root : folders) {
                     if (stopRequested) break;
@@ -240,6 +249,27 @@ final class SearchIndexer {
     // Auftreten per logcat tatsaechlich zeigt, WO die Rekursion feststeckt,
     // statt weiter zu raten. Wieder entfernen, sobald die Ursache klar ist.
     private static int walkCallCounter = 0;
+
+    /** Einen nicht auflistbaren Wurzelordner auf den zugänglichen internen
+     *  Speicher abbilden. "/storage/emulated" und "/storage" sind für eine App
+     *  nicht listbar; gemeint ist der primäre geteilte Speicher, den
+     *  {@link android.os.Environment#getExternalStorageDirectory()} liefert
+     *  (typisch "/storage/emulated/0"). Lesbare Ordner bleiben unverändert. */
+    private static String normalizeRoot(String path) {
+        try {
+            File f = new File(path);
+            if (f.isDirectory() && f.listFiles() != null) return path; // lesbar -> so lassen
+            if ("/storage/emulated".equals(path) || "/storage".equals(path) || "/sdcard".equals(path)) {
+                File ext = android.os.Environment.getExternalStorageDirectory();
+                if (ext != null && ext.isDirectory() && ext.listFiles() != null) {
+                    android.util.Log.i("SucherDiag", "Wurzelordner »" + path + "« nicht lesbar -> "
+                            + "verwende stattdessen »" + ext.getPath() + "«.");
+                    return ext.getPath();
+                }
+            }
+        } catch (Throwable ignored) {}
+        return path;
+    }
 
     private static void walk(SearchStore store, File dir, int depth) {
         int n = ++walkCallCounter;

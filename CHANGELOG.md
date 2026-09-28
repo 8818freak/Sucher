@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.27
+- Nicht auflistbarer Wurzelordner wird automatisch auf den zugänglichen
+  internen Speicher abgebildet: „/storage/emulated" (bzw. „/storage") kann eine
+  App gar nicht auflisten – gemeint ist praktisch immer „/storage/emulated/0".
+  Eine bestehende (im mageren Ordner-Picker gewählte) Einstellung funktioniert
+  damit von selbst, ohne erneut einen Ordner wählen zu müssen; der vorhandene
+  Index wird per mtime wiederverwendet (kein komplettes Neu-Indizieren).
+- Neuer Ein-Tipp-Knopf „Internen Speicher durchsuchen" fügt den gesamten
+  internen Speicher (/storage/emulated/0) direkt hinzu – ohne sich durch den
+  Ordner-Browser klicken zu müssen (dessen oberste Ebene sich vorher nicht als
+  „diesen Ordner nehmen" wählen ließ).
+
 ## 0.26
 - Wärme/Dauerlast behoben: Ist ein eingestellter Wurzelordner nicht auflistbar
   (z. B. „/storage/emulated" selbst – von einer App nicht lesbar; zugänglich ist
