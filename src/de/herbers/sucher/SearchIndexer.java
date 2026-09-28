@@ -3,6 +3,7 @@ package de.herbers.sucher;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -59,6 +60,20 @@ final class SearchIndexer {
     // Von start() einmal pro Lauf gesetzt.
     private static boolean searchComicsMetaCached = true;
     private static List<String> contentRootsCached = java.util.Collections.emptyList();
+    // Dateien, die einen frueheren Lauf zum Haengen brachten (siehe Watchdog
+    // unten) - fuer die wird kein Inhalt/Titelbild mehr geholt, nur Metadaten.
+    private static java.util.Set<String> skipContentCached = java.util.Collections.emptySet();
+
+    // ---- Selbstheilung gegen den in Sucher-Uebergabe Abschnitt 3 beschriebenen
+    // Haenger (Lauf blieb tagelang bei hoher CPU-Last stehen, Telefon wurde
+    // warm, kein Stoppen-Knopf/Force-Stop half zuverlaessig). Ein CPU-gebundener
+    // Endlos-Loop in einer Format-Bibliothek (PDFBox/POI/Mobi) reagiert NICHT
+    // auf ein kooperatives Stopp-Flag oder Thread.interrupt() - nur das harte
+    // Beenden des Prozesses stoppt ihn. Der Watchdog erkennt genau diesen Fall
+    // (kein Fortschritt mehr) und beendet den Prozess, nachdem er sich die
+    // ausloesende Datei gemerkt hat, damit der naechste Lauf sie ueberspringt. --
+    private static final long WATCHDOG_INTERVAL_MS = 30_000L;
+    private static final long STALL_MS = 5L * 60 * 1000; // 5 Min ohne Fortschritt = haengt
 
     static void start(Context ctx, Runnable onDone) {
         if (running) return;
@@ -68,12 +83,16 @@ final class SearchIndexer {
         Context app = ctx.getApplicationContext();
         contextApp = app;
         searchComicsMetaCached = Settings.searchComicsMeta(app);
+        skipContentCached = Settings.skipContentPaths(app);
         Handler main = new Handler(Looper.getMainLooper());
-        new Thread(() -> {
+        Thread worker = new Thread(() -> {
             try {
                 PdfExtractorHelper.init(app);
                 SearchStore store = SearchStore.get(app);
                 long runStart = System.currentTimeMillis();
+                DiagLog.log(app, "Indizierlauf gestartet"
+                        + (skipContentCached.isEmpty() ? "" : " (" + skipContentCached.size()
+                        + " Datei(en) auf der Überspringen-Liste)"));
                 visitedCanonical.clear();
                 java.util.List<String> folders = new java.util.ArrayList<>(Settings.searchFolders(app));
                 contentRootsCached = new java.util.ArrayList<>();
@@ -92,13 +111,62 @@ final class SearchIndexer {
                     if (!stopRequested) store.pruneStale(root, runStart);
                 }
                 if (!stopRequested) Settings.setSearchLastRun(app, System.currentTimeMillis());
+                DiagLog.log(app, (stopRequested ? "Indizierlauf gestoppt" : "Indizierlauf fertig")
+                        + ": " + scanned + " geprüft, " + contentIndexed + " mit neuem Volltext");
             } catch (Throwable t) {
                 android.util.Log.w("EdgeTabSearch", "Indizierlauf abgebrochen", t);
+                DiagLog.log(app, "Indizierlauf mit Fehler abgebrochen: " + t);
             } finally {
                 running = false;
                 if (onDone != null) main.post(onDone);
             }
-        }, "EdgeTabSearchIndexer").start();
+        }, "EdgeTabSearchIndexer");
+        worker.start();
+        startWatchdog(app, worker);
+    }
+
+    /** Beobachtet den laufenden Indizierer und beendet den Prozess hart, wenn
+     *  er ueber {@link #STALL_MS} keinen Fortschritt mehr macht (weder eine
+     *  weitere Datei noch einen weiteren Ordner) - der klassische Fall eines
+     *  Endlos-Loops in einer Format-Bibliothek, den ein kooperatives Stoppen
+     *  nicht erreicht. Die ausloesende Datei wird vorher gemerkt und kuenftig
+     *  uebersprungen. */
+    private static void startWatchdog(Context app, Thread worker) {
+        Thread wd = new Thread(() -> {
+            long lastAdvance = System.currentTimeMillis();
+            int lastScanned = scanned;
+            int lastWalk = walkCallCounter;
+            while (running) {
+                try { Thread.sleep(WATCHDOG_INTERVAL_MS); } catch (InterruptedException e) { return; }
+                if (!running) return;
+                if (scanned != lastScanned || walkCallCounter != lastWalk) {
+                    lastScanned = scanned;
+                    lastWalk = walkCallCounter;
+                    lastAdvance = System.currentTimeMillis();
+                    continue;
+                }
+                if (System.currentTimeMillis() - lastAdvance >= STALL_MS) {
+                    String stuck = currentPath;
+                    android.util.Log.w("EdgeTabSearch", "Indizierer haengt seit "
+                            + (STALL_MS / 1000) + "s ohne Fortschritt bei: " + stuck
+                            + " - Datei wird kuenftig uebersprungen, Prozess wird beendet.");
+                    try {
+                        DiagLog.log(app, "HÄNGER erkannt: kein Fortschritt seit "
+                                + (STALL_MS / 1000) + "s bei »" + stuck + "«. Datei wird künftig "
+                                + "übersprungen, Prozess wird jetzt beendet.");
+                    } catch (Throwable ignored) {}
+                    if (stuck != null && !stuck.isEmpty()) {
+                        try { Settings.addSkipContent(app, stuck); } catch (Throwable ignored) {}
+                    }
+                    stopRequested = true;
+                    worker.interrupt();
+                    Process.killProcess(Process.myPid());
+                    return;
+                }
+            }
+        }, "EdgeTabSearchWatchdog");
+        wd.setDaemon(true);
+        wd.start();
     }
 
     // Kanonische Pfade bereits besuchter Ordner - Android haengt an mehreren
@@ -119,6 +187,15 @@ final class SearchIndexer {
     // sinnvolle Ordnerstruktur ist weit flacher als das.
     private static final int MAX_DEPTH = 40;
 
+    // Zweite, breiten-orientierte Notbremse gegen einen Pfad-Alias-Ring, den
+    // MAX_DEPTH nicht faengt: rekursiert die Explosion nicht in die Tiefe,
+    // sondern immer wieder ueber neue (nicht deduplizierte) Aliaspfade in die
+    // Breite, waechst visitedCanonical unbegrenzt und der Lauf macht scheinbar
+    // ewig "Fortschritt" (der Watchdog greift dann nicht). Jede real sinnvolle
+    // Ordnerstruktur - auch eine sehr grosse Buchsammlung - hat weit weniger
+    // Ordner als diese Grenze; ein Alias-Ring erreicht sie in Sekunden.
+    private static final int MAX_DIRS = 300_000;
+
     // Nur voruebergehende Diagnose (siehe Log-Tag "EdgeTabSearchDiag") fuer
     // den bislang nicht sicher root-verursachten CPU-/Akku-Haenger: loggt
     // jeden 2000. walk()-Aufruf mit Tiefe/Pfad, damit ein naechstes
@@ -134,6 +211,14 @@ final class SearchIndexer {
         }
         if (depth > MAX_DEPTH) {
             android.util.Log.w("EdgeTabSearch", "Abbruch: Ordner zu tief verschachtelt (moeglicher Pfad-Alias-Ring): " + dir);
+            return;
+        }
+        if (visitedCanonical.size() >= MAX_DIRS) {
+            android.util.Log.w("EdgeTabSearch", "Abbruch: zu viele Ordner besucht ("
+                    + visitedCanonical.size() + ", moeglicher Pfad-Alias-Ring) - Lauf wird gestoppt.");
+            DiagLog.log(contextApp, "Abbruch: unplausibel viele Ordner besucht ("
+                    + visitedCanonical.size() + ", möglicher Pfad-Alias-Ring) bei »" + dir + "«.");
+            stopRequested = true; // beendet die restliche Rekursion sauber
             return;
         }
         String canon;
@@ -177,7 +262,11 @@ final class SearchIndexer {
             // Lauf komplett neu verarbeitet, nie uebersprungen (gefunden, weil
             // ein Lauf reproduzierbar bei einer .mp3 haengen blieb: die lief
             // immer wieder in den teuren Pfad, obwohl laengst "fertig").
-            boolean wantContent = isSupported(ext) && f.length() <= MAX_CONTENT_BYTES
+            // Dateien, die einen frueheren Lauf zum Haengen brachten, bekommen
+            // weder Inhalt noch Titelbild - nur Metadaten (der teure, moeglich
+            // in einer Endlosschleife haengende Pfad wird komplett gemieden).
+            boolean poisoned = skipContentCached.contains(f.getPath());
+            boolean wantContent = !poisoned && isSupported(ext) && f.length() <= MAX_CONTENT_BYTES
                     && contentWanted(f.getPath());
             SearchStore.KnownState known = store.known(f.getPath());
             if (known.mtime == mtime && (!wantContent || known.contentOk)) {
@@ -188,7 +277,7 @@ final class SearchIndexer {
                 // nie greifen, solange sich keine einzige Datei mehr aendert
                 // (bei einer stabilen Buchsammlung: nie) - Mathias' Verdacht,
                 // dass mit dem Indizieren "irgendwas nicht stimmt".
-                if (contextApp != null && !Thumbnails.exists(contextApp, f.getPath())) {
+                if (!poisoned && contextApp != null && !Thumbnails.exists(contextApp, f.getPath())) {
                     generateThumbSafely(contextApp, f, ext);
                 }
                 scanned++;
@@ -198,7 +287,11 @@ final class SearchIndexer {
             long created = readCreated(f, mtime);
 
             FileExtractors.Result r = new FileExtractors.Result();
-            if (isSupported(ext)) { // Metadaten sind billig, immer versuchen
+            // Bei einer vergifteten Datei den Extraktor GANZ auslassen (auch
+            // die Metadaten-Extraktion, denn schon die kann der Haenger gewesen
+            // sein) - es bleibt beim reinen Datei-Eintrag (Name/Typ/Groesse/
+            // Datum), der bleibt ueber die Namenssuche auffindbar.
+            if (!poisoned && isSupported(ext)) { // Metadaten sind billig, immer versuchen
                 boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
                 if (!comic || searchComicsMetaCached) {
                     r = FileExtractors.extract(f, ext, wantContent);
@@ -207,10 +300,12 @@ final class SearchIndexer {
             }
             store.upsert(f.getPath(), name, ext, f.length(), mtime, created,
                     r.text, r.drm, r.title, r.author, r.series, r.seriesIndex);
-            if (contextApp != null) generateThumbSafely(contextApp, f, ext);
+            if (!poisoned && contextApp != null) generateThumbSafely(contextApp, f, ext);
             scanned++;
         } catch (Throwable t) {
             android.util.Log.w("EdgeTabSearch", "Datei uebersprungen: " + f.getPath(), t);
+            DiagLog.log(contextApp, "Datei übersprungen (Fehler beim Verarbeiten): »"
+                    + f.getPath() + "« - " + t);
         }
     }
 

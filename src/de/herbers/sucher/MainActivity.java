@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.provider.CalendarContract;
 import android.provider.ContactsContract;
 import android.text.Editable;
@@ -1489,6 +1490,21 @@ public class MainActivity extends Activity {
         });
         root.addView(autoCb);
 
+        // Harter Not-Aus: beendet den kompletten Sucher-Prozess sofort. Anders
+        // als das kooperative "Stoppen" (das nur ein Flag setzt, das ein in
+        // einer Format-Bibliothek festhaengender Indizierer-Thread nie
+        // pruefen kann) wirkt das Beenden des Prozesses IMMER - auch bei einem
+        // solchen Haenger. Android startet den Prozess danach hoechstens
+        // leerlaufend als Benachrichtigungs-Listener neu, nicht den Indizierer.
+        Button quit = new Button(this);
+        quit.setText("Sucher beenden (Indizierung sofort stoppen)");
+        quit.setOnClickListener(v -> {
+            SearchIndexer.requestStop();
+            finishAffinity();
+            Process.killProcess(Process.myPid());
+        });
+        root.addView(quit);
+
         section(root, "Sicherung", d);
         TextView backupDesc = new TextView(this);
         backupDesc.setText("Einstellungen UND den kompletten Suchindex (alle bereits erfassten Volltexte) als Datei sichern oder aus einer solchen Datei wiederherstellen (ersetzt dabei den kompletten aktuellen Stand).");
@@ -1531,7 +1547,75 @@ public class MainActivity extends Activity {
         backupRow.addView(importBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         root.addView(backupRow);
 
+        buildDiagnosticsSection(root, d);
         buildAboutSection(root, d);
+    }
+
+    // ---------- Diagnose (problematische Dateien + Protokoll) ----------
+
+    private void buildDiagnosticsSection(LinearLayout root, int d) {
+        java.util.List<String> skipped = new ArrayList<>(Settings.skipContentPaths(this));
+        java.util.Collections.sort(skipped);
+        if (!skipped.isEmpty()) {
+            section(root, "Problematische Dateien", d);
+            TextView hint = new TextView(this);
+            hint.setText("Diese Datei(en) haben den Indizierer zum Hängen gebracht und werden "
+                    + "jetzt nur noch über den Namen erfasst (kein Inhalt/Titelbild). Über ✕ "
+                    + "wieder freigeben, falls du es erneut versuchen willst.");
+            hint.setTextColor(Color.parseColor("#8899AA"));
+            hint.setTextSize(12 * fs);
+            hint.setPadding(0, 0, 0, 6 * d);
+            root.addView(hint);
+            for (String path : skipped) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView t = new TextView(this);
+                t.setText(path);
+                t.setTextColor(Color.parseColor("#E0B0B0"));
+                t.setTextSize(12 * fs);
+                t.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                row.addView(t);
+                TextView del = new TextView(this);
+                del.setText("✕");
+                del.setTextColor(Color.parseColor("#E06666"));
+                del.setTextSize(16 * fs);
+                del.setPadding(12 * d, 4 * d, 4 * d, 4 * d);
+                del.setOnClickListener(v -> { Settings.removeSkipContent(this, path); rebuild(); });
+                row.addView(del);
+                root.addView(row);
+            }
+        }
+
+        section(root, "Diagnose-Protokoll", d);
+        TextView diagHint = new TextView(this);
+        diagHint.setText("Was der Indizierer zuletzt getan hat und an welchen Dateien er sich "
+                + "verschluckt hat – hilft bei der Fehlersuche.");
+        diagHint.setTextColor(Color.parseColor("#8899AA"));
+        diagHint.setTextSize(12 * fs);
+        diagHint.setPadding(0, 0, 0, 6 * d);
+        root.addView(diagHint);
+        String diag = DiagLog.read(this);
+        if (diag == null || diag.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText("(noch leer)");
+            none.setTextColor(Color.GRAY);
+            none.setTextSize(12 * fs);
+            root.addView(none);
+        } else {
+            TextView log = new TextView(this);
+            log.setText(diag);
+            log.setTextColor(Color.parseColor("#CCCCCC"));
+            log.setTextSize(11 * fs);
+            log.setTypeface(android.graphics.Typeface.MONOSPACE);
+            log.setTextIsSelectable(true);
+            log.setPadding(0, 6 * d, 0, 6 * d);
+            root.addView(log);
+            Button clear = new Button(this);
+            clear.setText("Protokoll löschen");
+            clear.setOnClickListener(v -> { DiagLog.clear(this); rebuild(); });
+            root.addView(clear);
+        }
     }
 
     // ---------- Über Sucher (Version, Lizenz, Änderungsprotokoll) ----------

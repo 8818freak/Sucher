@@ -4,6 +4,34 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.23
+- Neu: Diagnose-Protokoll (Einstellungen, unter der Sicherung). Hält fest, was
+  der Indizierer tut und an welchen Dateien er sich verschluckt - ohne Kabel/
+  Logcat einsehbar, mit Knopf zum Löschen.
+- Neu: Liste "Problematische Dateien" - Dateien, die einen Indizierer-Hänger
+  ausgelöst haben (und deshalb nur noch über den Namen erfasst werden), werden
+  jetzt angezeigt und lassen sich einzeln wieder freigeben (erneut versuchen).
+- Übersprungene Dateien (Fehler beim Verarbeiten) und erkannte Hänger werden
+  ins Diagnose-Protokoll geschrieben.
+
+## 0.22
+- Behebt den in mehreren Läufen aufgetretenen Dauer-Hänger (Indizierer lief
+  über Tage mit hoher CPU-Last, Telefon wurde warm, weder der Stoppen-Knopf
+  noch das erzwungene Beenden über die Systemeinstellungen hielten ihn
+  zuverlässig an): Ein Endlos-Loop in einer Format-Bibliothek reagiert nicht
+  auf ein kooperatives Stopp-Flag. Neu:
+  - Selbstheilung: Ein Wächter beendet den Prozess automatisch, wenn der
+    Indizierer 5 Minuten lang keinen Fortschritt mehr macht, und merkt sich
+    vorher die auslösende Datei. Künftige Läufe überspringen diese Datei
+    komplett (nur noch ihr Datei-Eintrag über die Namenssuche, kein Inhalt/
+    Titelbild) - derselbe Hänger wiederholt sich so nicht endlos.
+  - Neuer Knopf "Sucher beenden" (Einstellungen, bei der Indizierung): beendet
+    den Prozess sofort und hart - wirkt auch dann, wenn ein Thread festhängt,
+    anders als das kooperative Stoppen.
+  - Zweite Notbremse gegen einen Pfad-Alias-Ring: Ein Lauf bricht ab, wenn er
+    unplausibel viele Ordner besucht (greift auch dort, wo die bisherige
+    Tiefen-Grenze nicht anschlägt, weil die Rekursion in die Breite läuft).
+
 ## 0.21
 - Neu: Sichern/Wiederherstellen (Einstellungen → Sicherung) - sichert
   Einstellungen UND den kompletten Suchindex (alle bereits erfassten

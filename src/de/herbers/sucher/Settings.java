@@ -23,6 +23,7 @@ public final class Settings {
     private static final String K_AUTO_REINDEX = "auto_reindex"; // periodischer Hintergrund-Abgleich
     private static final String K_FONT_SCALE = "font_scale"; // Prozent, 100 = normal
     private static final String K_SEARCH_HISTORY = "search_history"; // neueste zuerst, ""-getrennt
+    private static final String K_SKIP_CONTENT = "skip_content_paths"; // Dateien, die den Indizierer haengen liessen
     private static final int MAX_HISTORY = 15;
 
     private Settings() {}
@@ -61,6 +62,25 @@ public final class Settings {
         Set<String> s = new HashSet<>(p(c).getStringSet(K_CONTENT_FOLDERS, Collections.<String>emptySet()));
         if (on) s.add(path); else s.remove(path);
         p(c).edit().putStringSet(K_CONTENT_FOLDERS, s).apply();
+    }
+
+    // ---- Dateien, die einen Indizierlauf zum Haengen brachten (Endlosschleife
+    // in einer Format-Bibliothek o.ae.). Die Selbstheilung im SearchIndexer
+    // merkt sich so eine Datei hier, bevor sie den Prozess beendet; kuenftige
+    // Laeufe erfassen dann nur noch ihre Metadaten (Name/Groesse/Datum), nie
+    // wieder den teuren Inhalt/das Titelbild - so wird derselbe Haenger nicht
+    // endlos wiederholt. commit() (nicht apply()), weil direkt danach der
+    // Prozess hart beendet wird und der Eintrag den Neustart ueberleben muss. --
+    public static Set<String> skipContentPaths(Context c) {
+        return new HashSet<>(p(c).getStringSet(K_SKIP_CONTENT, Collections.<String>emptySet()));
+    }
+    public static void addSkipContent(Context c, String path) {
+        Set<String> s = skipContentPaths(c);
+        if (s.add(path)) p(c).edit().putStringSet(K_SKIP_CONTENT, s).commit();
+    }
+    public static void removeSkipContent(Context c, String path) {
+        Set<String> s = skipContentPaths(c);
+        if (s.remove(path)) p(c).edit().putStringSet(K_SKIP_CONTENT, s).apply();
     }
 
     public static boolean searchComicsMeta(Context c) { return p(c).getBoolean(K_SEARCH_COMICS, true); }
