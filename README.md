@@ -15,6 +15,11 @@ or advanced, with completely different terms or fields — to just that
 result set, until cleared again. Repeatable, so a broad first search can be
 narrowed down step by step instead of building one giant combined query.
 
+## Requirements / Voraussetzungen
+
+- **Android 10 or newer** (`minSdkVersion` 29), target `targetSdkVersion` 34 (Android 14).
+- *Läuft ab **Android 10** aufwärts (Mindest-SDK 29), Ziel-SDK 34 (Android 14).*
+
 ## Screenshots
 
 <table>
