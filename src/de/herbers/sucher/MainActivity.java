@@ -74,6 +74,49 @@ public class MainActivity extends Activity {
     // Rueckkehr aus der Vorschau.
     private static List<String> scopePaths = null;
 
+    // Einschraenkung auf EINEN Ordner samt Unterordnern (Mathias' Wunsch, "in
+    // einem bestimmten Ordner und seinen Unterordnern suchen") - als
+    // Pfad-Praefix. Static wie scopePaths, ueberlebt die Rueckkehr aus der
+    // Vorschau. null = keine Ordner-Einschraenkung.
+    private static String scopeFolder = null;
+
+    // Suchverlauf auf-/zugeklappt (Aufklappmenue mit drehendem Pfeil).
+    private static boolean historyOpen = false;
+
+    // Ordner-Auswahl fuer den Suchbereich (feature "in Ordner suchen") -
+    // eigener kleiner Browser, unabhaengig vom Ordner-Browser der Einstellungen.
+    private boolean scopeFolderPicking = false;
+    private String scopeBrowsePath = null;
+
+    // Datei-Unterkategorien fuer eigene Ergebnis-Karten (Mathias' Wunsch:
+    // Videos/Bilder/Musik als eigene Kategorien). Alles andere ist "Dateien"
+    // (Dokumente). Alle Dateien liegen ohnehin im Index (auch Medien - nur
+    // ueber den Namen), die Aufteilung passiert also allein bei der Anzeige.
+    private static final java.util.Set<String> IMAGE_EXTS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "tif", "tiff", "svg", "ico", "jfif"));
+    private static final java.util.Set<String> VIDEO_EXTS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "mp4", "mkv", "avi", "mov", "webm", "m4v", "3gp", "3gpp", "flv", "wmv", "mpg", "mpeg", "ts", "m2ts"));
+    private static final java.util.Set<String> AUDIO_EXTS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "mp3", "flac", "ogg", "oga", "m4a", "aac", "wav", "wma", "opus", "aiff", "aif", "mid", "midi", "amr"));
+
+    // Vorschaubilder bei Bedarf im Hintergrund nacherzeugen (siehe
+    // rowThumbOrIcon) - ein einzelner Thread reicht, und je Pfad nur ein
+    // Versuch pro Sitzung, damit wiederholte rebuild()s nicht dieselbe (evtl.
+    // erfolglose) Erzeugung immer wieder anstossen.
+    private static final java.util.concurrent.Executor THUMB_EXEC =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
+    private static final java.util.Set<String> THUMB_TRIED =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+    private static String fileCategory(String ext) {
+        if (ext == null) return "files";
+        String e = ext.toLowerCase(java.util.Locale.ROOT);
+        if (IMAGE_EXTS.contains(e)) return "images";
+        if (VIDEO_EXTS.contains(e)) return "videos";
+        if (AUDIO_EXTS.contains(e)) return "music";
+        return "files";
+    }
+
     private static final int REQ_PIM = 501;
     private static final int REQ_BACKUP_EXPORT = 502;
     private static final int REQ_BACKUP_IMPORT = 503;
@@ -233,25 +276,81 @@ public class MainActivity extends Activity {
         fieldBg.setColor(Color.parseColor("#2C2C2E"));
         fieldBg.setCornerRadius(20 * d);
         field.setBackground(fieldBg);
-        field.setPadding(16 * d, 10 * d, 16 * d, 10 * d);
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        flp.topMargin = 10 * d;
+        // Rechts Platz fuer den ✕-Loeschknopf lassen.
+        field.setPadding(16 * d, 10 * d, 44 * d, 10 * d);
         field.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        field.setLayoutParams(flp);
-        root.addView(field);
+        field.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT));
+
+        // Feld + ✕-Loeschknopf (Mathias' Wunsch) in einem FrameLayout - der
+        // Knopf schwebt rechts im Feld und leert es (der TextWatcher blendet
+        // dann Verlauf ein und leert die Trefferliste ganz normal).
+        android.widget.FrameLayout fieldWrap = new android.widget.FrameLayout(this);
+        LinearLayout.LayoutParams fwlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        fwlp.topMargin = 10 * d;
+        fieldWrap.setLayoutParams(fwlp);
+        fieldWrap.addView(field);
+        TextView clearBtn = new TextView(this);
+        clearBtn.setText("✕");
+        clearBtn.setTextColor(Color.parseColor("#8899AA"));
+        clearBtn.setTextSize(15 * fs);
+        clearBtn.setPadding(12 * d, 10 * d, 14 * d, 10 * d);
+        android.widget.FrameLayout.LayoutParams clp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER_VERTICAL | Gravity.END);
+        clearBtn.setLayoutParams(clp);
+        clearBtn.setVisibility(field.getText().length() == 0 ? View.GONE : View.VISIBLE);
+        clearBtn.setOnClickListener(v -> field.setText(""));
+        fieldWrap.addView(clearBtn);
+        root.addView(fieldWrap);
+
+        // Steuerzeile: in einem bestimmten Ordner suchen + Suche zuruecksetzen.
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        controls.setGravity(Gravity.CENTER_VERTICAL);
+        controls.setPadding(0, 8 * d, 0, 0);
+        TextView folderBtn = new TextView(this);
+        folderBtn.setText(scopeFolder == null ? "📁 In Ordner suchen…" : "📁 Ordner ändern…");
+        folderBtn.setTextColor(Color.parseColor("#2E9BE6"));
+        folderBtn.setTextSize(13 * fs);
+        folderBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        folderBtn.setOnClickListener(v -> {
+            scopeFolderPicking = !scopeFolderPicking;
+            if (scopeFolderPicking && scopeBrowsePath == null) {
+                java.util.List<String> f = new ArrayList<>(Settings.searchFolders(this));
+                scopeBrowsePath = f.isEmpty() ? Environment.getExternalStorageDirectory().getAbsolutePath()
+                        : java.util.Collections.min(f);
+            }
+            rebuild();
+        });
+        controls.addView(folderBtn);
+        TextView newSearch = new TextView(this);
+        newSearch.setText("Neue Suche");
+        newSearch.setTextColor(Color.parseColor("#2E9BE6"));
+        newSearch.setTextSize(13 * fs);
+        newSearch.setPadding(10 * d, 6 * d, 4 * d, 6 * d);
+        newSearch.setOnClickListener(v -> resetSearch());
+        controls.addView(newSearch);
+        root.addView(controls);
+
+        if (scopeFolderPicking) root.addView(scopeFolderBrowser(d));
 
         // Suchverlauf - nur sichtbar, solange das Feld leer ist (kein
         // rebuild() noetig zum Ein-/Ausblenden waehrend der Eingabe, siehe
-        // TextWatcher unten). Aufgenommen wird ein Begriff erst, wenn er ueber
-        // die Sucher-Taste der Tastatur bestaetigt wird - jeder Tipp-Pause
-        // (250ms-Entprellung) mitzuschreiben wuerde den Verlauf mit
+        // TextWatcher unten). Als Aufklappmenue mit drehendem Pfeil (Mathias'
+        // Wunsch). Aufgenommen wird ein Begriff, wenn er ueber die Sucher-Taste
+        // bestaetigt wird ODER wenn ein Treffer geoeffnet/vorangezeigt wird -
+        // jede 250ms-Tipp-Pause mitzuschreiben wuerde den Verlauf mit
         // Zwischenstaenden ("b", "bu", "buc"...) zumuellen.
         LinearLayout historyBox = buildHistoryBox(field, d);
         root.addView(historyBox);
 
         root.addView(categoryChips(d));
 
+        if (scopeFolder != null) root.addView(folderScopeBanner(d));
         if (scopePaths != null) root.addView(scopeBanner(d));
 
         TextView advToggle = new TextView(this);
@@ -291,6 +390,7 @@ public class MainActivity extends Activity {
                 String q = e.toString();
                 lastQuery = q;
                 lastSearchWasAdvanced = false;
+                clearBtn.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
                 historyBox.setVisibility(q.trim().isEmpty() ? View.VISIBLE : View.GONE);
                 if (pendingSearch != null) DEBOUNCE.removeCallbacks(pendingSearch);
                 pendingSearch = () -> runSearch(q, results, d);
@@ -322,9 +422,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Suchverlauf: eingeklappt sichtbar, solange das Suchfeld leer ist -
-     *  antippen fuellt das Feld und stoesst ueber den bestehenden TextWatcher
-     *  ganz normal eine Suche an. */
+    /** Suchverlauf als Aufklappmenue (Mathias' Wunsch): sichtbar, solange das
+     *  Suchfeld leer ist; eine Kopfzeile mit drehendem Pfeil (▸/▾) klappt die
+     *  Liste auf und zu. Ein Eintrag antippen fuellt das Feld und stoesst ueber
+     *  den bestehenden TextWatcher ganz normal eine Suche an. Im aufgeklappten
+     *  Bereich unten "Verlauf löschen". */
     private LinearLayout buildHistoryBox(EditText field, int d) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -335,20 +437,23 @@ public class MainActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(0, 10 * d, 0, 2 * d);
+        head.setPadding(0, 10 * d, 0, 6 * d);
+        TextView arrow = new TextView(this);
+        arrow.setText(historyOpen ? "▾" : "▸");
+        arrow.setTextColor(Color.parseColor("#2E9BE6"));
+        arrow.setTextSize(17 * fs);
+        arrow.setPadding(0, 0, 10 * d, 0);
+        head.addView(arrow);
         TextView label = new TextView(this);
-        label.setText("Letzte Suchen");
+        label.setText("🕐 Letzte Suchen (" + history.size() + ")");
         label.setTextColor(Color.parseColor("#8899AA"));
-        label.setTextSize(11 * fs);
+        label.setTextSize(12 * fs);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         head.addView(label);
-        TextView clearAll = new TextView(this);
-        clearAll.setText("Verlauf löschen");
-        clearAll.setTextColor(Color.parseColor("#E06666"));
-        clearAll.setTextSize(11 * fs);
-        clearAll.setOnClickListener(v -> { Settings.clearSearchHistory(this); rebuild(); });
-        head.addView(clearAll);
+        head.setOnClickListener(v -> { historyOpen = !historyOpen; rebuild(); });
         box.addView(head);
+
+        if (!historyOpen) return box;
 
         for (String q : history) {
             LinearLayout row = new LinearLayout(this);
@@ -376,7 +481,40 @@ public class MainActivity extends Activity {
             row.setOnClickListener(v -> { field.setText(q); field.setSelection(q.length()); });
             box.addView(row);
         }
+
+        TextView clearAll = new TextView(this);
+        clearAll.setText("Verlauf löschen");
+        clearAll.setTextColor(Color.parseColor("#E06666"));
+        clearAll.setTextSize(12 * fs);
+        clearAll.setPadding(0, 8 * d, 0, 4 * d);
+        clearAll.setOnClickListener(v -> { Settings.clearSearchHistory(this); historyOpen = false; rebuild(); });
+        box.addView(clearAll);
         return box;
+    }
+
+    /** Suche komplett zuruecksetzen (Mathias' Wunsch "Neue Suche"): Feld leeren,
+     *  alle Eingrenzungen/erweiterten Felder/Kategorie-Filter/aufgeklappten
+     *  Zustaende zuruecksetzen. */
+    private void resetSearch() {
+        lastQuery = "";
+        lastSearchWasAdvanced = false;
+        lastOpenedPath = null;
+        scopePaths = null;
+        scopeFolder = null;
+        scopeFolderPicking = false;
+        advName = advAuthor = advTitle = advSeries = "";
+        advExts.clear();
+        advCreatedFrom = advCreatedTo = advModifiedFrom = advModifiedTo = 0;
+        extPickerOpen = false;
+        advancedOpen = false;
+        EXCLUDED_CATS.clear();
+        EXPANDED.clear();
+        android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null && getCurrentFocus() != null) {
+            imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        }
+        rebuild();
     }
 
     /** Chip-Leiste zum Ein-/Ausschliessen einzelner Ergebnis-Kategorien fuer
@@ -389,8 +527,9 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setPadding(0, 8 * d, 0, 0);
-        String[][] cats = {{"files", "Dateien"}, {"contacts", "Kontakte"},
-                {"events", "Termine"}, {"notifs", "Nachrichten"}};
+        String[][] cats = {{"files", "Dateien"}, {"images", "Bilder"}, {"videos", "Videos"},
+                {"music", "Musik"}, {"contacts", "Kontakte"}, {"events", "Termine"},
+                {"notifs", "Nachrichten"}};
         for (String[] cat : cats) row.addView(chip(cat[0], cat[1], d));
         hsv.addView(row);
         return hsv;
@@ -609,7 +748,7 @@ public class MainActivity extends Activity {
         long modifiedTo = advModifiedTo > 0 ? advModifiedTo + DateUtils.DAY_IN_MILLIS - 1 : 0;
         List<SearchStore.FileHit> files = SearchStore.get(this).advancedSearch(
                 advName, advAuthor, advTitle, advSeries, advExts,
-                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, 100, scopePaths);
+                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, 100, scopePaths, scopeFolder);
         if (files.isEmpty()) {
             TextView none = new TextView(this);
             none.setText("Keine Treffer.");
@@ -619,8 +758,7 @@ public class MainActivity extends Activity {
             return;
         }
         View[] highlightHolder = new View[1];
-        results.addView(card("Dateien", files.size(), d, fileRows(files, d, highlightHolder), "files_adv"));
-        results.addView(narrowRow(files, d));
+        addFileCards(results, files, d, highlightHolder);
         if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
     }
 
@@ -678,6 +816,138 @@ public class MainActivity extends Activity {
         return row;
     }
 
+    /** Banner, solange eine Ordner-Einschraenkung aktiv ist - zeigt den Ordner
+     *  und erlaubt, sie wieder aufzuheben. */
+    private View folderScopeBanner(int d) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#1B3A52"));
+        bg.setCornerRadius(10 * d);
+        row.setBackground(bg);
+        row.setPadding(12 * d, 8 * d, 12 * d, 8 * d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = 10 * d;
+        row.setLayoutParams(lp);
+
+        String nm = scopeFolder;
+        int slash = nm.replaceAll("/$", "").lastIndexOf('/');
+        String shortNm = slash >= 0 ? nm.substring(slash + 1) : nm;
+        TextView label = new TextView(this);
+        label.setText("📁 Nur in " + shortNm + " (mit Unterordnern)");
+        label.setTextColor(Color.parseColor("#8ecbff"));
+        label.setTextSize(12.5f * fs);
+        label.setSingleLine(true);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(label);
+
+        TextView clear = new TextView(this);
+        clear.setText("Aufheben ✕");
+        clear.setTextColor(Color.parseColor("#2E9BE6"));
+        clear.setTextSize(12.5f * fs);
+        clear.setPadding(12 * d, 0, 0, 0);
+        clear.setOnClickListener(v -> { scopeFolder = null; rebuild(); });
+        row.addView(clear);
+        return row;
+    }
+
+    /** Kleiner Ordner-Browser, um den Such-Bereich auf einen Ordner (samt
+     *  Unterordnern) einzugrenzen - eigenstaendig, nicht der Ordner-Browser der
+     *  Einstellungen (der fuegt dauerhaft Index-Ordner hinzu). */
+    private View scopeFolderBrowser(int d) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(8 * d, 8 * d, 8 * d, 8 * d);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#FF141416"));
+        bg.setCornerRadius(8 * d);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = 8 * d;
+        box.setLayoutParams(blp);
+        box.setBackground(bg);
+
+        TextView path = new TextView(this);
+        path.setText(scopeBrowsePath);
+        path.setTextColor(Color.parseColor("#2E9BE6"));
+        path.setTextSize(12 * fs);
+        box.addView(path);
+
+        Button choose = new Button(this);
+        choose.setText("In diesem Ordner suchen");
+        choose.setOnClickListener(v -> {
+            scopeFolder = scopeBrowsePath;
+            scopeFolderPicking = false;
+            rebuild();
+        });
+        box.addView(choose);
+
+        java.io.File dir = new java.io.File(scopeBrowsePath);
+        java.io.File parent = dir.getParentFile();
+        if (parent != null) {
+            TextView up = new TextView(this);
+            up.setText("⬆ .. (nach oben)");
+            up.setTextColor(Color.parseColor("#B0B0B5"));
+            up.setTextSize(13 * fs);
+            up.setPadding(0, 6 * d, 0, 6 * d);
+            up.setOnClickListener(v -> { scopeBrowsePath = parent.getAbsolutePath(); rebuild(); });
+            box.addView(up);
+        }
+
+        java.io.File[] children = dir.listFiles(java.io.File::isDirectory);
+        if (children != null) {
+            java.util.Arrays.sort(children, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+            for (java.io.File c : children) {
+                if (c.getName().startsWith(".")) continue;
+                TextView row = new TextView(this);
+                row.setText("📁 " + c.getName());
+                row.setTextColor(Color.WHITE);
+                row.setTextSize(13 * fs);
+                row.setPadding(0, 6 * d, 0, 6 * d);
+                row.setOnClickListener(v -> { scopeBrowsePath = c.getAbsolutePath(); rebuild(); });
+                box.addView(row);
+            }
+        }
+
+        Button cancel = new Button(this);
+        cancel.setText("Abbrechen");
+        cancel.setOnClickListener(v -> { scopeFolderPicking = false; rebuild(); });
+        box.addView(cancel);
+        return box;
+    }
+
+    /** Datei-Treffer in eigene Karten je Kategorie aufteilen (Dateien/Bilder/
+     *  Videos/Musik, Mathias' Wunsch) - abgewaehlte Kategorien werden nicht
+     *  gezeigt. Unter jeder Karte die "in diesen Treffern weitersuchen"-Zeile.
+     *  Die zuletzt geoeffnete Datei wird ggf. aufgeklappt, damit sie nach
+     *  Rueckkehr aus einer anderen App/der Vorschau sichtbar ist. */
+    private void addFileCards(LinearLayout results, List<SearchStore.FileHit> files, int d, View[] highlightHolder) {
+        java.util.LinkedHashMap<String, List<SearchStore.FileHit>> byCat = new java.util.LinkedHashMap<>();
+        byCat.put("files", new ArrayList<>());
+        byCat.put("images", new ArrayList<>());
+        byCat.put("videos", new ArrayList<>());
+        byCat.put("music", new ArrayList<>());
+        for (SearchStore.FileHit h : files) byCat.get(fileCategory(h.ext)).add(h);
+
+        String[][] order = {{"files", "Dateien"}, {"images", "Bilder"},
+                {"videos", "Videos"}, {"music", "Musik"}};
+        for (String[] cat : order) {
+            if (EXCLUDED_CATS.contains(cat[0])) continue;
+            List<SearchStore.FileHit> list = byCat.get(cat[0]);
+            if (list.isEmpty()) continue;
+            if (lastOpenedPath != null) {
+                for (int i = 0; i < list.size(); i++) {
+                    if (list.get(i).path.equals(lastOpenedPath) && i >= PAGE) { EXPANDED.add(cat[0]); break; }
+                }
+            }
+            results.addView(card(cat[1], list.size(), d, fileRows(list, d, highlightHolder), cat[0]));
+            results.addView(narrowRow(list, d));
+        }
+    }
+
     private void runSearch(String q, LinearLayout results, int d) {
         results.removeAllViews();
         if (q == null || q.trim().length() < 2) {
@@ -692,8 +962,10 @@ public class MainActivity extends Activity {
         if (!hasPimPermission()) results.addView(pimPermissionHint(d));
         if (!hasNotifPermission()) results.addView(notifPermissionHint(d));
 
-        List<SearchStore.FileHit> files = (hasStoragePermission() && !EXCLUDED_CATS.contains("files"))
-                ? SearchStore.get(this).search(q, 60, scopePaths) : new ArrayList<>();
+        boolean anyFileCat = !(EXCLUDED_CATS.contains("files") && EXCLUDED_CATS.contains("images")
+                && EXCLUDED_CATS.contains("videos") && EXCLUDED_CATS.contains("music"));
+        List<SearchStore.FileHit> files = (hasStoragePermission() && anyFileCat)
+                ? SearchStore.get(this).search(q, 60, scopePaths, scopeFolder) : new ArrayList<>();
         List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(q);
         List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(q);
         List<SearchStore.NotifHit> notifs = new ArrayList<>();
@@ -715,23 +987,12 @@ public class MainActivity extends Activity {
         }
 
         // Die zuletzt geoeffnete Datei deutlich erkennbar machen und ins
-        // Blickfeld scrollen, wenn man aus einer anderen App zurueckkommt
-        // (Mathias' Wunsch) - dafuer muss ihre Karte ggf. aufgeklappt sein,
-        // falls sie sonst hinter "Mehr anzeigen" versteckt waere.
-        if (lastOpenedPath != null) {
-            for (int i = 0; i < files.size(); i++) {
-                if (files.get(i).path.equals(lastOpenedPath) && i >= PAGE) {
-                    EXPANDED.add("files");
-                    break;
-                }
-            }
-        }
+        // Blickfeld scrollen, wenn man aus einer anderen App/der Vorschau
+        // zurueckkommt (Mathias' Wunsch) - dafuer muss ihre Karte ggf.
+        // aufgeklappt sein (erledigt addFileCards je Kategorie).
         View[] highlightHolder = new View[1];
 
-        if (!files.isEmpty()) {
-            results.addView(card("Dateien", files.size(), d, fileRows(files, d, highlightHolder), "files"));
-            results.addView(narrowRow(files, d));
-        }
+        addFileCards(results, files, d, highlightHolder);
         if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
         if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
         if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));
@@ -935,6 +1196,7 @@ public class MainActivity extends Activity {
     private void openFile(String path) {
         try {
             lastOpenedPath = path;
+            rememberSearch();
             java.io.File f = new java.io.File(path);
             Uri uri = LocalFileProvider.uriForFile(this, f);
             String mime = android.webkit.MimeTypeMap.getSingleton()
@@ -1079,38 +1341,91 @@ public class MainActivity extends Activity {
      *  App oeffnen, siehe openFile()), Mathias wollte ausdruecklich "beim
      *  Antippen der [Miniatur]" fuer die Vorschau. */
     private View rowThumbOrIcon(SearchStore.FileHit h, int d) {
+        int s = 44 * d;
+        ImageView iv = new ImageView(this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(s, s);
+        lp.rightMargin = 12 * d;
+        iv.setLayoutParams(lp);
+        iv.setClickable(true);
+        iv.setOnClickListener(v -> openPreview(h));
+
         java.io.File thumb = Thumbnails.fileFor(this, h.path);
-        if (thumb.isFile()) {
-            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeFile(thumb.getAbsolutePath());
-            if (bmp != null) {
-                ImageView iv = new ImageView(this);
-                iv.setImageBitmap(bmp);
-                iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                int s = 44 * d;
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(s, s);
-                lp.rightMargin = 12 * d;
-                iv.setLayoutParams(lp);
-                android.graphics.drawable.GradientDrawable clip = new android.graphics.drawable.GradientDrawable();
-                clip.setCornerRadius(6 * d);
-                iv.setClipToOutline(true);
-                iv.setBackground(clip);
-                iv.setClickable(true);
-                iv.setOnClickListener(v -> openPreview(h));
-                return iv;
-            }
+        android.graphics.Bitmap bmp = thumb.isFile()
+                ? android.graphics.BitmapFactory.decodeFile(thumb.getAbsolutePath()) : null;
+        if (bmp != null) {
+            showThumb(iv, bmp, d);
+            return iv;
         }
-        View icon = rowIcon(R.drawable.ic_file, colorFor(h.ext), d);
-        icon.setClickable(true);
-        icon.setOnClickListener(v -> openPreview(h));
-        return icon;
+
+        // Kein Bild im Cache -> vorerst das farbige Typ-Symbol, aber (einmalig
+        // je Sitzung und nur fuer Formate, die ueberhaupt eins hergeben) im
+        // Hintergrund nacherzeugen und dann einblenden. So erscheinen
+        // Vorschaubilder auch dann, wenn der System-Cache geleert wurde, die
+        // Datei erst nach dem letzten Indizierlauf dazukam oder ueber ihren
+        // Ordner noch nie ein Lauf lief (Mathias' Meldung "Titelbilder fehlen").
+        showIcon(iv, h, d);
+        if (Thumbnails.canHaveThumb(h.ext) && THUMB_TRIED.add(h.path)) {
+            final String path = h.path;
+            final String ext = h.ext;
+            final java.lang.ref.WeakReference<ImageView> ref = new java.lang.ref.WeakReference<>(iv);
+            final Context app = getApplicationContext();
+            THUMB_EXEC.execute(() -> {
+                if (!Thumbnails.ensure(app, new java.io.File(path), ext)) return;
+                android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeFile(
+                        Thumbnails.fileFor(app, path).getAbsolutePath());
+                if (b == null) return;
+                runOnUiThread(() -> {
+                    ImageView target = ref.get();
+                    if (target != null) showThumb(target, b, d);
+                });
+            });
+        }
+        return iv;
+    }
+
+    private void showThumb(ImageView iv, android.graphics.Bitmap bmp, int d) {
+        iv.setImageBitmap(bmp);
+        iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        iv.clearColorFilter();
+        iv.setPadding(0, 0, 0, 0);
+        android.graphics.drawable.GradientDrawable clip = new android.graphics.drawable.GradientDrawable();
+        clip.setCornerRadius(6 * d);
+        iv.setClipToOutline(true);
+        iv.setBackground(clip);
+    }
+
+    private void showIcon(ImageView iv, SearchStore.FileHit h, int d) {
+        iv.setImageResource(R.drawable.ic_file);
+        iv.setColorFilter(colorFor(h.ext));
+        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        iv.setClipToOutline(false);
+        iv.setBackground(null);
+        int p = 8 * d;
+        iv.setPadding(p, p, p, p);
     }
 
     private void openPreview(SearchStore.FileHit h) {
+        // Auch die Vorschau zaehlt als "zuletzt geoeffnet" (Mathias' Meldung:
+        // beim Schliessen der Vorschau sprang die Liste sonst zur zuletzt in
+        // einer ANDEREN App geoeffneten Datei statt zur vorangezeigten).
+        lastOpenedPath = h.path;
+        rememberSearch();
         Intent i = new Intent(this, PreviewActivity.class);
         i.putExtra(PreviewActivity.EXTRA_PATH, h.path);
         i.putExtra(PreviewActivity.EXTRA_EXT, h.ext);
         i.putExtra(PreviewActivity.EXTRA_CONTENT_OK, contentIndexingCoversPath(h.path));
         startActivity(i);
+    }
+
+    /** Die aktuelle einfache Suche in den Verlauf aufnehmen, sobald der Nutzer
+     *  einen Treffer oeffnet/vorzeigt (ein deutliches Zeichen, dass der Begriff
+     *  gemeint war) - so fuellt sich der Verlauf zuverlaessig, ohne jede
+     *  Tipp-Pause der 250ms-Entprellung mitzuschreiben. Erweiterte Suchen
+     *  bleiben aussen vor (der Verlauf ist nur fuer die Freitextsuche). */
+    private void rememberSearch() {
+        if (!lastSearchWasAdvanced && lastQuery != null && lastQuery.trim().length() >= 2) {
+            Settings.addSearchHistory(this, lastQuery);
+        }
     }
 
     /** Ob der Ordner, in dem diese Datei liegt, "Inhalt durchsuchbar machen"

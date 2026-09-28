@@ -4,6 +4,29 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.28
+- Neu: In einem bestimmten Ordner (samt Unterordnern) suchen – Knopf
+  „📁 In Ordner suchen…" über einen kleinen Ordner-Browser; ein blaues Banner
+  zeigt die Einschränkung und hebt sie auf Wunsch wieder auf. Gilt für einfache
+  UND erweiterte Suche.
+- Neue Kategorien Bilder, Videos und Musik als eigene Ergebnis-Karten (mit
+  eigenen Filter-Chips) neben „Dateien" (Dokumente), Kontakten, Terminen und
+  Nachrichten. Medien sind ohnehin im Index (über den Namen) – die Aufteilung
+  passiert bei der Anzeige.
+- Titel-/Vorschaubilder werden jetzt auch beim Anzeigen bei Bedarf nacherzeugt,
+  nicht mehr nur während eines Indizierlaufs – sie erscheinen also auch, wenn
+  der System-Cache geleert wurde, eine Datei erst nach dem letzten Lauf dazukam
+  oder über ihren Ordner noch nie ein Lauf lief.
+- Beim Schließen einer Vorschau springt die Liste zur zuletzt vorangezeigten
+  Datei (vorher irrtümlich zur zuletzt in einer anderen App geöffneten).
+- ✕-Knopf im Suchfeld zum schnellen Leeren des Suchtexts.
+- „Neue Suche" setzt die ganze Suche zurück (Text, Eingrenzungen, erweiterte
+  Felder, Kategorie-Filter).
+- Suchverlauf wieder da – als Aufklappmenü mit drehendem Pfeil, „Verlauf
+  löschen" im aufgeklappten Bereich; er füllt sich jetzt zuverlässig (beim
+  Bestätigen mit der Sucher-Taste und beim Öffnen/Vorzeigen eines Treffers),
+  statt fast immer leer zu bleiben.
+
 ## 0.27
 - Nicht auflistbarer Wurzelordner wird automatisch auf den zugänglichen
   internen Speicher abgebildet: „/storage/emulated" (bzw. „/storage") kann eine

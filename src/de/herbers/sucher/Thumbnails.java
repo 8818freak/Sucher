@@ -62,6 +62,37 @@ final class Thumbnails {
         return fileFor(ctx, path).isFile();
     }
 
+    /** Ob fuer dieses Format ueberhaupt ein Titel-/Vorschaubild entstehen kann -
+     *  damit der Aufrufer (MainActivity) nicht bei jedem Anzeigen vergeblich
+     *  fuer Formate ohne Bild (Musik, Text, ...) zu erzeugen versucht. */
+    static boolean canHaveThumb(String extLower) {
+        if (extLower == null) return false;
+        if (isImageExt(extLower)) return true;
+        switch (extLower) {
+            case "epub": case "mobi": case "azw": case "azw3": case "prc":
+            case "cbz": case "docx": case "xlsx": case "pptx": case "pdf":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /** Miniaturbild bei Bedarf nacherzeugen, falls noch keins im Cache liegt -
+     *  fuers Nacherzeugen BEIM ANZEIGEN eines Treffers (Cache vom System
+     *  geleert, Datei erst nach dem letzten Indizierlauf dazugekommen, oder es
+     *  wurde ueberhaupt noch nie ein Lauf ueber diesen Ordner gemacht). Laeuft
+     *  synchron; der Aufrufer ruft es im Hintergrund auf. Liefert true, wenn
+     *  danach ein Bild vorliegt. */
+    static boolean ensure(Context ctx, File src, String extLower) {
+        if (exists(ctx, src.getAbsolutePath())) return true;
+        if (src == null || !src.isFile()) return false;
+        if ("pdf".equals(extLower)) {
+            PdfExtractorHelper.init(ctx.getApplicationContext());
+            return generatePdf(ctx, src);
+        }
+        return generate(ctx, src, extLower);
+    }
+
     /** Erzeugt (falls moeglich) das Miniaturbild einer Datei und legt es im
      *  Cache ab - liefert true bei Erfolg. Ueberschreibt eine evtl.
      *  vorhandene alte Miniatur (Datei kann sich seit dem letzten Lauf

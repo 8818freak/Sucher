@@ -238,12 +238,26 @@ public class SearchStore extends SQLiteOpenHelper {
         return sb.append(')').toString();
     }
 
+    /** Einschraenkung auf EINEN Ordner samt Unterordnern (Mathias' Wunsch,
+     *  "in einem bestimmten Ordner und seinen Unterordnern suchen") - als
+     *  Pfad-Praefix "<ordner>/%" per LIKE. Leerer/null Praefix schraenkt nicht
+     *  ein. LIKE-Sonderzeichen im Ordnernamen werden escaped (wie in
+     *  pruneStale), damit z.B. "_" nicht als Platzhalter wirkt. col ist die
+     *  Pfadspalte im jeweiligen SQL ("path" bzw. "f.path" im FTS-Join). */
+    private static String folderClause(String folderPrefix, List<String> argsOut, String col) {
+        if (folderPrefix == null || folderPrefix.isEmpty()) return "";
+        String escaped = folderPrefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        String pattern = (escaped.endsWith("/") ? escaped : escaped + "/") + "%";
+        argsOut.add(pattern);
+        return " AND " + col + " LIKE ? ESCAPE '\\'";
+    }
+
     /** Volltext- und Namenssuche kombiniert: FTS-Treffer (Inhalt+Titel) plus
      *  Dateien, deren Name/Titel/Autor/Serie passt, auch ohne indizierten
      *  Inhalt (z.B. Bilder, Comics ohne ComicInfo.xml, Dateien ohne
      *  unterstuetztes Format). scope (optional): nur Pfade aus dieser Menge
      *  beruecksichtigen - "in diesen Ergebnissen weitersuchen". */
-    public List<FileHit> search(String query, int limit, Collection<String> scope) {
+    public List<FileHit> search(String query, int limit, Collection<String> scope, String folderPrefix) {
         List<FileHit> out = new ArrayList<>();
         if (query == null || query.trim().isEmpty()) return out;
         String q = query.trim();
@@ -256,12 +270,13 @@ public class SearchStore extends SQLiteOpenHelper {
             List<String> args1 = new ArrayList<>();
             args1.add(ftsQuery);
             String scopeSql1 = scopeClause(scope, args1);
+            String folderSql1 = folderClause(folderPrefix, args1, "f.path");
             args1.add(String.valueOf(limit));
             Cursor c = db.rawQuery(
                     "SELECT f." + FILE_COLS.replace(", ", ", f.") + ", "
                     + "snippet(content_fts, '', '', '…', -1, 40) "
                     + "FROM content_fts JOIN files f ON f.path = content_fts.path "
-                    + "WHERE content_fts MATCH ?" + scopeSql1.replace("path", "f.path") + " LIMIT ?",
+                    + "WHERE content_fts MATCH ?" + scopeSql1.replace("path", "f.path") + folderSql1 + " LIMIT ?",
                     args1.toArray(new String[0]));
             while (c.moveToNext()) {
                 FileHit h = row(c);
@@ -279,10 +294,11 @@ public class SearchStore extends SQLiteOpenHelper {
         List<String> args2 = new ArrayList<>();
         args2.add(like); args2.add(like); args2.add(like); args2.add(like);
         String scopeSql2 = scopeClause(scope, args2);
+        String folderSql2 = folderClause(folderPrefix, args2, "path");
         args2.add(String.valueOf(limit));
         Cursor c2 = db.rawQuery(
                 "SELECT " + FILE_COLS + " FROM files "
-                + "WHERE (name LIKE ? OR title LIKE ? OR author LIKE ? OR series LIKE ?)" + scopeSql2
+                + "WHERE (name LIKE ? OR title LIKE ? OR author LIKE ? OR series LIKE ?)" + scopeSql2 + folderSql2
                 + " ORDER BY mtime DESC LIMIT ?",
                 args2.toArray(new String[0]));
         while (c2.moveToNext()) {
@@ -299,7 +315,7 @@ public class SearchStore extends SQLiteOpenHelper {
     public List<FileHit> advancedSearch(String name, String author, String title, String series,
                                          java.util.Set<String> exts, long createdFrom, long createdTo,
                                          long modifiedFrom, long modifiedTo, int limit,
-                                         Collection<String> scope) {
+                                         Collection<String> scope, String folderPrefix) {
         List<FileHit> out = new ArrayList<>();
         StringBuilder where = new StringBuilder("1=1");
         List<String> args = new ArrayList<>();
@@ -320,6 +336,7 @@ public class SearchStore extends SQLiteOpenHelper {
         if (modifiedFrom > 0) { where.append(" AND mtime >= ?"); args.add(String.valueOf(modifiedFrom)); }
         if (modifiedTo > 0) { where.append(" AND mtime <= ?"); args.add(String.valueOf(modifiedTo)); }
         where.append(scopeClause(scope, args));
+        where.append(folderClause(folderPrefix, args, "path"));
         args.add(String.valueOf(limit));
         Cursor c = getReadableDatabase().rawQuery(
                 "SELECT " + FILE_COLS + " FROM files WHERE " + where + " ORDER BY mtime DESC LIMIT ?",
