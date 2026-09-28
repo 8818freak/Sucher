@@ -90,6 +90,11 @@ Android search experience doesn't reach into file contents, and no single
 free app covers Office+PDF+e-book+comic-metadata search without turning
 into a 19MB ad-supported bundle. Free/open-source groundwork, same author.
 
+## Documentation / Dokumentation
+
+- **English:** [User guide](docs/Sucher-Guide.pdf) · [Flyer](docs/Sucher-Flyer.pdf)
+- **Deutsch:** [Anleitung](docs/Sucher-Anleitung.pdf) · [Werbung](docs/Sucher-Werbung.pdf)
+
 ## License
 
 GNU General Public License v3.0 (or later) — see `LICENSE`. Bundled
