@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.24
+- Diagnose-Protokoll zeigt jetzt Pfade: Bisher stand ein Datei-Pfad nur bei
+  einem Einzeldatei-Fehler oder einem erkannten Datei-Hänger im Log - bei einem
+  Ordner-Amoklauf (Pfad-Alias-Ring) blieb er leer, weil dabei nie eine Datei
+  erreicht wird. Neu wird der aktuell durchlaufene ORDNER mitgeführt und
+  gemeldet, und alle 30 s ein Herzschlag-Eintrag geschrieben (geprüfte Dateien,
+  besuchte Ordner, aktueller Ordner/aktuelle Datei). So zeigt der Log beim
+  nächsten Warmwerden genau, wo der Lauf steckt - und ob die Ordnerzahl bei
+  stehender Dateizahl hochläuft (typisches Zeichen eines Alias-Rings).
+- Der Fehler-Abbruch nennt jetzt die Fehlerstelle und den zuletzt bearbeiteten
+  Ordner/die Datei; ein Systemabbruch (Job-Zeitfenster) wird protokolliert.
+
 ## 0.23
 - Neu: Diagnose-Protokoll (Einstellungen, unter der Sicherung). Hält fest, was
   der Indizierer tut und an welchen Dateien er sich verschluckt - ohne Kabel/

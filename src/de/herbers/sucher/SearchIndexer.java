@@ -35,6 +35,11 @@ final class SearchIndexer {
     static volatile int scanned = 0;
     static volatile int contentIndexed = 0;
     static volatile String currentPath = "";
+    // Aktuell durchlaufener ORDNER (unabhaengig von der Datei). Wichtig fuers
+    // Diagnose-Protokoll: bei einem Ordner-Amoklauf (Pfad-Alias-Ring) haengt
+    // der Lauf in walk() und erreicht nie eine Datei - dann ist currentPath
+    // leer, aber currentDir zeigt, WO es feststeckt.
+    static volatile String currentDir = "";
 
     static boolean isRunning() { return running; }
 
@@ -115,7 +120,11 @@ final class SearchIndexer {
                         + ": " + scanned + " geprüft, " + contentIndexed + " mit neuem Volltext");
             } catch (Throwable t) {
                 android.util.Log.w("EdgeTabSearch", "Indizierlauf abgebrochen", t);
-                DiagLog.log(app, "Indizierlauf mit Fehler abgebrochen: " + t);
+                StackTraceElement[] st = t.getStackTrace();
+                String where = (st != null && st.length > 0) ? " @ " + st[0] : "";
+                DiagLog.log(app, "Indizierlauf mit Fehler abgebrochen: " + t + where
+                        + " (zuletzt: Ordner »" + currentDir + "«"
+                        + (currentPath == null || currentPath.isEmpty() ? "" : ", Datei »" + currentPath + "«") + ")");
             } finally {
                 running = false;
                 if (onDone != null) main.post(onDone);
@@ -139,6 +148,16 @@ final class SearchIndexer {
             while (running) {
                 try { Thread.sleep(WATCHDOG_INTERVAL_MS); } catch (InterruptedException e) { return; }
                 if (!running) return;
+                // Diagnose-Herzschlag: alle 30 s festhalten, WO der Lauf gerade
+                // ist (Ordner + Datei + Zaehler). So zeigt der Log auch dann
+                // Pfade, wenn keine Einzeldatei einen Fehler wirft - und man
+                // sieht an steigender Ordnerzahl bei stehendem "geprüft" sofort
+                // einen Ordner-Amoklauf (Pfad-Alias-Ring) statt nur Wärme.
+                try {
+                    DiagLog.log(app, "läuft: " + scanned + " geprüft, " + visitedCanonical.size()
+                            + " Ordner besucht; gerade: Ordner »" + currentDir + "«"
+                            + (currentPath == null || currentPath.isEmpty() ? "" : ", Datei »" + currentPath + "«"));
+                } catch (Throwable ignored) {}
                 if (scanned != lastScanned || walkCallCounter != lastWalk) {
                     lastScanned = scanned;
                     lastWalk = walkCallCounter;
@@ -146,14 +165,16 @@ final class SearchIndexer {
                     continue;
                 }
                 if (System.currentTimeMillis() - lastAdvance >= STALL_MS) {
-                    String stuck = currentPath;
+                    // Bei einem Ordner-Hänger ist currentPath leer -> dann den
+                    // Ordner als Verursacher merken/melden.
+                    String stuck = (currentPath != null && !currentPath.isEmpty()) ? currentPath : currentDir;
                     android.util.Log.w("EdgeTabSearch", "Indizierer haengt seit "
                             + (STALL_MS / 1000) + "s ohne Fortschritt bei: " + stuck
-                            + " - Datei wird kuenftig uebersprungen, Prozess wird beendet.");
+                            + " - wird kuenftig uebersprungen, Prozess wird beendet.");
                     try {
                         DiagLog.log(app, "HÄNGER erkannt: kein Fortschritt seit "
-                                + (STALL_MS / 1000) + "s bei »" + stuck + "«. Datei wird künftig "
-                                + "übersprungen, Prozess wird jetzt beendet.");
+                                + (STALL_MS / 1000) + "s bei »" + stuck + "« (Ordner »" + currentDir
+                                + "«). Wird künftig übersprungen, Prozess wird jetzt beendet.");
                     } catch (Throwable ignored) {}
                     if (stuck != null && !stuck.isEmpty()) {
                         try { Settings.addSkipContent(app, stuck); } catch (Throwable ignored) {}
@@ -221,6 +242,7 @@ final class SearchIndexer {
             stopRequested = true; // beendet die restliche Rekursion sauber
             return;
         }
+        currentDir = dir.getPath();
         String canon;
         try { canon = dir.getCanonicalPath(); } catch (Exception e) { canon = dir.getAbsolutePath(); }
         if (!visitedCanonical.add(canon)) return;

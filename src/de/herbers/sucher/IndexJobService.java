@@ -79,6 +79,8 @@ public class IndexJobService extends JobService {
         // der naechste periodische Lauf (oder der naechste App-Start)
         // reicht, ein knapper Retry-Loop wuerde nur erneut ins selbe
         // Zeitfenster-Problem laufen.
+        try { DiagLog.log(this, "Systemabbruch: Job-Zeitfenster beendet – Lauf wird gestoppt."); }
+        catch (Throwable ignored) {}
         SearchIndexer.requestStop();
         return false;
     }
