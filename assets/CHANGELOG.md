@@ -4,6 +4,23 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.26
+- Wärme/Dauerlast behoben: Ist ein eingestellter Wurzelordner nicht auflistbar
+  (z. B. „/storage/emulated" selbst – von einer App nicht lesbar; zugänglich ist
+  erst „/storage/emulated/0"), wird er jetzt übersprungen und der Index NICHT
+  angetastet. Vorher lief in dem Fall die Verwaisten-Bereinigung über ALLE
+  Einträge dieses Ordners – zeilenweise, minutenlang, das Telefon wurde warm,
+  und der nächste Lauf musste alles neu indizieren. Ein deutlicher Hinweis
+  landet im Diagnose-Protokoll.
+- Verwaisten-Bereinigung (pruneStale) läuft jetzt in EINER Transaktion statt
+  tausender einzelner Lösch-Commits – um Größenordnungen schneller und kühler.
+
+## 0.25
+- Diagnose-Zeilen werden zusätzlich nach logcat gespiegelt (Tag „SucherDiag")
+  und vor jeder Inhalts-/Metadaten-Extraktion eine Breadcrumb mit Datei, Typ
+  und Größe ausgegeben – so bleibt bei einem harten Prozess-Ende die zuletzt
+  begonnene Datei nachvollziehbar (per Kabel live mitlesbar).
+
 ## 0.24
 - Diagnose-Protokoll zeigt jetzt Pfade: Bisher stand ein Datei-Pfad nur bei
   einem Einzeldatei-Fehler oder einem erkannten Datei-Hänger im Log - bei einem

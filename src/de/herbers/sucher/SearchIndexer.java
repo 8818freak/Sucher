@@ -107,7 +107,24 @@ final class SearchIndexer {
                 for (String root : folders) {
                     if (stopRequested) break;
                     File rootDir = new File(root);
-                    if (rootDir.isDirectory()) walk(store, rootDir, 0);
+                    // WICHTIG: Nur laufen/aufraeumen, wenn der Wurzelordner
+                    // tatsaechlich lesbar ist. Ein nicht auflistbarer Ordner
+                    // (z.B. "/storage/emulated" selbst - Rechte drwxrws---, von
+                    // einer normalen App nicht listbar; zugaenglich ist erst
+                    // "/storage/emulated/0") liefert listFiles()==null. Frueher
+                    // lief dann trotzdem pruneStale und sortierte ALLE Eintraege
+                    // dieses Ordners als "verwaist" aus - zeilenweise, minuten-
+                    // lang, das Telefon wurde warm, und beim naechsten Lauf
+                    // musste alles neu indiziert werden. Jetzt: ueberspringen,
+                    // Index NICHT anfassen, deutlich ins Protokoll schreiben.
+                    if (!rootDir.isDirectory() || rootDir.listFiles() == null) {
+                        DiagLog.log(app, "Wurzelordner »" + root + "« ist nicht lesbar bzw. kein "
+                                + "Verzeichnis – übersprungen, Index NICHT bereinigt. Bitte in den "
+                                + "Einstellungen einen zugänglichen Ordner wählen (z. B. /storage/emulated/0 "
+                                + "statt /storage/emulated).");
+                        continue;
+                    }
+                    walk(store, rootDir, 0);
                     // Nur als vollstaendig behandeln (und Verschwundenes
                     // entfernen), wenn der Ordner nicht durch einen Stopp
                     // mittendrin abgebrochen wurde - sonst wuerden noch
@@ -316,6 +333,12 @@ final class SearchIndexer {
             if (!poisoned && isSupported(ext)) { // Metadaten sind billig, immer versuchen
                 boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
                 if (!comic || searchComicsMetaCached) {
+                    // Breadcrumb VOR der (teuren, evtl. haengenden) Extraktion -
+                    // nur nach logcat (nicht in die kleine Datei), damit bei
+                    // einem harten Prozess-Kill die zuletzt begonnene Datei
+                    // sichtbar bleibt (Tag "SucherDiag").
+                    android.util.Log.i("SucherDiag", "extrahiere" + (wantContent ? " Inhalt" : " Metadaten")
+                            + " [" + ext + ", " + f.length() + "B]: " + f.getPath());
                     r = FileExtractors.extract(f, ext, wantContent);
                     if (r.text != null && !r.text.isEmpty()) contentIndexed++;
                 }

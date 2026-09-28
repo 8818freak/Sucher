@@ -26,6 +26,9 @@ final class DiagLog {
 
     static synchronized void log(Context ctx, String msg) {
         if (ctx == null) return;
+        // Zusaetzlich nach logcat spiegeln (Tag "SucherDiag") - so laesst sich
+        // ein Lauf per Kabel live mitlesen, ohne die (app-interne) Datei.
+        android.util.Log.i("SucherDiag", msg);
         String stamp = new SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(new Date());
         append(ctx, stamp + "  " + msg + "\n");
     }

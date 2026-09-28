@@ -192,9 +192,21 @@ public class SearchStore extends SQLiteOpenHelper {
         List<String> stale = new ArrayList<>();
         while (c.moveToNext()) stale.add(c.getString(0));
         c.close();
-        for (String p : stale) {
-            db.delete("files", "path=?", new String[]{p});
-            db.delete("content_fts", "path=?", new String[]{p});
+        if (stale.isEmpty()) return;
+        // In EINER Transaktion loeschen. Vorher lief jedes delete() als eigene
+        // Auto-Commit-Transaktion - bei vielen verwaisten Eintraegen (im
+        // Extremfall der ganze Index) tausende einzelne Commits, minutenlang,
+        // das Telefon wurde warm. Als Block ist das um Groessenordnungen
+        // schneller und kuehler.
+        db.beginTransaction();
+        try {
+            for (String p : stale) {
+                db.delete("files", "path=?", new String[]{p});
+                db.delete("content_fts", "path=?", new String[]{p});
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
     }
 
