@@ -7,3 +7,7 @@ keystore.*
 .idea/
 *.iml
 .vscode/
+
+# Interne Übergabe-/Handover-Notizen - NIE veröffentlichen
+*Uebergabe*.md
+*bergabe*.md
