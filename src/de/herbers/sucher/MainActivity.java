@@ -656,36 +656,150 @@ public class MainActivity extends Activity {
         wrap.addView(head);
 
         if (extPickerOpen) {
-            android.widget.GridLayout grid = new android.widget.GridLayout(this);
-            grid.setColumnCount(3);
-            for (String ext : SearchStore.get(this).distinctExts()) {
-                String key = ext.toLowerCase(java.util.Locale.ROOT);
+            // (1) Manuelle Eingabe: beliebige Endung(en) hinzufuegen, auch solche
+            //     die (noch) nicht im Index vorkommen. Mehrere per Leerzeichen/Komma.
+            LinearLayout manualRow = new LinearLayout(this);
+            manualRow.setOrientation(LinearLayout.HORIZONTAL);
+            manualRow.setGravity(Gravity.CENTER_VERTICAL);
+            manualRow.setPadding(0, 4 * d, 0, 4 * d);
+            EditText in = new EditText(this);
+            in.setHint("Eigene Endung(en), z. B. epub pdf");
+            in.setHintTextColor(Color.parseColor("#6E6E73"));
+            in.setTextColor(Color.WHITE);
+            in.setTextSize(13 * fs);
+            in.setSingleLine(true);
+            in.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            manualRow.addView(in);
+            TextView addBtn = new TextView(this);
+            addBtn.setText("+ Hinzufügen");
+            addBtn.setTextColor(Color.WHITE);
+            addBtn.setTextSize(13 * fs);
+            addBtn.setPadding(12 * d, 8 * d, 12 * d, 8 * d);
+            GradientDrawable abg = new GradientDrawable();
+            abg.setCornerRadius(10 * d);
+            abg.setColor(Color.parseColor("#2E9BE6"));
+            addBtn.setBackground(abg);
+            addBtn.setOnClickListener(v -> { addManualExts(in.getText().toString()); rebuild(); });
+            manualRow.addView(addBtn);
+            wrap.addView(manualRow);
+
+            // (2) Vorschlagsliste mit Klartext-Erklaerung, antippen zum
+            //     An-/Abwaehlen (mehrere gleichzeitig moeglich).
+            TextView sugHead = new TextView(this);
+            sugHead.setText("Vorschläge (antippen):");
+            sugHead.setTextColor(Color.parseColor("#6E6E73"));
+            sugHead.setTextSize(11 * fs);
+            sugHead.setPadding(0, 10 * d, 0, 2 * d);
+            wrap.addView(sugHead);
+            for (java.util.Map.Entry<String, String> e : EXT_INFO.entrySet()) {
+                final String key = e.getKey();
                 boolean on = advExts.contains(key);
-                TextView chip = new TextView(this);
-                chip.setText(ext);
-                chip.setGravity(Gravity.CENTER);
-                chip.setTextColor(on ? Color.WHITE : Color.parseColor("#8899AA"));
-                chip.setTextSize(12 * fs);
-                chip.setPadding(8 * d, 8 * d, 8 * d, 8 * d);
-                GradientDrawable cbg = new GradientDrawable();
-                cbg.setCornerRadius(10 * d);
-                cbg.setColor(on ? Color.parseColor("#2E9BE6") : Color.parseColor("#2C2C2E"));
-                chip.setBackground(cbg);
-                android.widget.GridLayout.LayoutParams glp = new android.widget.GridLayout.LayoutParams();
-                glp.width = 0;
-                glp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-                glp.columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f);
-                glp.setMargins(3 * d, 3 * d, 3 * d, 3 * d);
-                chip.setLayoutParams(glp);
-                chip.setOnClickListener(v -> {
-                    if (on) advExts.remove(key); else advExts.add(key);
-                    rebuild();
-                });
-                grid.addView(chip);
+                TextView row = new TextView(this);
+                row.setText(key + "  —  " + e.getValue());
+                row.setTextColor(on ? Color.WHITE : Color.parseColor("#B0BEC5"));
+                row.setTextSize(13 * fs);
+                row.setPadding(10 * d, 8 * d, 10 * d, 8 * d);
+                GradientDrawable rbg = new GradientDrawable();
+                rbg.setCornerRadius(8 * d);
+                rbg.setColor(on ? Color.parseColor("#2E9BE6") : Color.parseColor("#2C2C2E"));
+                row.setBackground(rbg);
+                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rlp.setMargins(0, 2 * d, 0, 2 * d);
+                row.setLayoutParams(rlp);
+                row.setOnClickListener(v -> { if (advExts.contains(key)) advExts.remove(key); else advExts.add(key); rebuild(); });
+                wrap.addView(row);
             }
-            wrap.addView(grid);
+
+            // (3) Tatsaechlich im Index vorhandene Endungen (Ueberblick, deckt
+            //     auch die ohne Eintrag in der Vorschlagsliste ab).
+            java.util.List<String> present = SearchStore.get(this).distinctExts();
+            if (!present.isEmpty()) {
+                TextView presHead = new TextView(this);
+                presHead.setText("In deinem Index vorhanden:");
+                presHead.setTextColor(Color.parseColor("#6E6E73"));
+                presHead.setTextSize(11 * fs);
+                presHead.setPadding(0, 12 * d, 0, 2 * d);
+                wrap.addView(presHead);
+                android.widget.GridLayout grid = new android.widget.GridLayout(this);
+                grid.setColumnCount(3);
+                for (String ext : present) {
+                    final String key = ext.toLowerCase(java.util.Locale.ROOT);
+                    boolean on = advExts.contains(key);
+                    TextView chip = new TextView(this);
+                    chip.setText(ext);
+                    chip.setGravity(Gravity.CENTER);
+                    chip.setTextColor(on ? Color.WHITE : Color.parseColor("#8899AA"));
+                    chip.setTextSize(12 * fs);
+                    chip.setPadding(8 * d, 8 * d, 8 * d, 8 * d);
+                    GradientDrawable cbg = new GradientDrawable();
+                    cbg.setCornerRadius(10 * d);
+                    cbg.setColor(on ? Color.parseColor("#2E9BE6") : Color.parseColor("#2C2C2E"));
+                    chip.setBackground(cbg);
+                    android.widget.GridLayout.LayoutParams glp = new android.widget.GridLayout.LayoutParams();
+                    glp.width = 0;
+                    glp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    glp.columnSpec = android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f);
+                    glp.setMargins(3 * d, 3 * d, 3 * d, 3 * d);
+                    chip.setLayoutParams(glp);
+                    chip.setOnClickListener(v -> {
+                        if (advExts.contains(key)) advExts.remove(key); else advExts.add(key);
+                        rebuild();
+                    });
+                    grid.addView(chip);
+                }
+                wrap.addView(grid);
+            }
         }
         return wrap;
+    }
+
+    /** Kommagetrennte/leerzeichengetrennte Endungen zur Auswahl hinzufuegen
+     *  (fuehrender Punkt und Gross-/Kleinschreibung egal). */
+    private void addManualExts(String raw) {
+        if (raw == null) return;
+        for (String tok : raw.split("[,;\\s]+")) {
+            String x = tok.trim().toLowerCase(java.util.Locale.ROOT);
+            if (x.startsWith(".")) x = x.substring(1);
+            if (!x.isEmpty()) advExts.add(x);
+        }
+    }
+
+    /** Bekannte Dateiendungen mit Klartext-Erklaerung fuer die Vorschlagsliste
+     *  in der erweiterten Suche (Reihenfolge = Anzeigereihenfolge). */
+    private static final java.util.LinkedHashMap<String, String> EXT_INFO = new java.util.LinkedHashMap<>();
+    static {
+        EXT_INFO.put("epub", "E-Book (elektronisches Buch)");
+        EXT_INFO.put("mobi", "Kindle-Buch (MOBI)");
+        EXT_INFO.put("azw3", "Kindle-Buch (AZW3)");
+        EXT_INFO.put("azw", "Kindle-Buch (AZW)");
+        EXT_INFO.put("fb2", "E-Book (FictionBook)");
+        EXT_INFO.put("pdf", "PDF-Dokument");
+        EXT_INFO.put("txt", "Textdokument");
+        EXT_INFO.put("md", "Markdown-Text");
+        EXT_INFO.put("rtf", "Rich-Text-Dokument");
+        EXT_INFO.put("doc", "Word-Dokument (älter)");
+        EXT_INFO.put("docx", "Word-Dokument");
+        EXT_INFO.put("xls", "Excel-Tabelle (älter)");
+        EXT_INFO.put("xlsx", "Excel-Tabelle");
+        EXT_INFO.put("ppt", "PowerPoint (älter)");
+        EXT_INFO.put("pptx", "PowerPoint-Präsentation");
+        EXT_INFO.put("csv", "Tabelle (CSV)");
+        EXT_INFO.put("cbz", "Comic-Archiv (CBZ/ZIP)");
+        EXT_INFO.put("cbr", "Comic-Archiv (CBR/RAR)");
+        EXT_INFO.put("jpg", "Bild (JPEG)");
+        EXT_INFO.put("png", "Bild (PNG)");
+        EXT_INFO.put("gif", "Bild (GIF)");
+        EXT_INFO.put("webp", "Bild (WebP)");
+        EXT_INFO.put("html", "Webseite (HTML)");
+        EXT_INFO.put("xml", "XML-Datei");
+        EXT_INFO.put("json", "JSON-Datei");
+        EXT_INFO.put("zip", "ZIP-Archiv");
+        EXT_INFO.put("mp3", "Audio (MP3)");
+        EXT_INFO.put("m4a", "Audio (M4A)");
+        EXT_INFO.put("flac", "Audio (FLAC)");
+        EXT_INFO.put("mp4", "Video (MP4)");
+        EXT_INFO.put("mkv", "Video (MKV)");
     }
 
     private interface TextSink { void set(String s); }

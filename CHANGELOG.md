@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.36
+- Neu: Suche nach Dateiendung erweitert. In der erweiterten Suche unter
+  „Dateiart" gibt es jetzt (a) eine freie Eingabe für beliebige Endungen (auch
+  solche, die noch nicht im Index sind) und (b) eine Vorschlagsliste mit
+  Klartext-Erklärung (epub = E-Book, txt = Textdokument, cbz = Comic-Archiv …).
+  Mehrere Endungen lassen sich gleichzeitig auswählen (per UND mit den übrigen
+  Suchfeldern kombiniert). Die bisherige Liste der tatsächlich vorhandenen
+  Endungen bleibt als Überblick erhalten.
+
 ## 0.35
 - Intern: Die Format-Extraktoren (PDF/EPUB/MOBI/AZW3/CBZ/altes Office → Text,
   Titel/Autor/Serie, Titelbilder) kommen jetzt aus der gemeinsamen Bibliothek
