@@ -4,6 +4,20 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.33
+- Behoben: Der Indizierer konnte dauerhaft hängenbleiben und markierte dabei
+  eine zufällige, unschuldige Datei als „problematisch" (was nichts half – beim
+  nächsten Lauf hing es wieder). Ursache: Beim Aufräumen verwaister Einträge
+  galten unveränderte Dateien fälschlich als gelöscht, was ein extrem teures
+  Volltext-Massenlöschen auslöste (nur der Not-Abbruch nach 5 Minuten bewahrte
+  den Index vorm Leeren). Unveränderte Dateien werden jetzt korrekt als „in
+  diesem Lauf gesehen" markiert; das Aufräumen betrifft nur noch tatsächlich
+  entfernte Dateien und läuft in Sekunden. Eine evtl. zuvor fälschlich als
+  „problematisch" gelistete Datei kannst du über das ✕ wieder freigeben.
+- Neu (Diagnose): Bleibt der Indizierer ohne Fortschritt stehen, hält das
+  Diagnose-Protokoll jetzt den genauen Stapel (Stack) der hängenden Stelle
+  fest – so ist die Ursache künftig sofort erkennbar.
+
 ## 0.32
 - Intern: Die Aufzählung wählbarer Benachrichtigungsquellen (alle startbaren
   Apps) kommt jetzt aus der gemeinsamen Bibliothek herbers-android-common

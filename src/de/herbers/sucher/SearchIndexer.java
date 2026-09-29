@@ -39,6 +39,10 @@ final class SearchIndexer {
     static volatile int phase = 0;
     // In Phase 1 gesammelte Pfade, die in Phase 2 Inhalt/Titel/Autor brauchen.
     private static java.util.List<String> pendingExtract = new java.util.ArrayList<>();
+    // In diesem Lauf angetroffene, aber unveraenderte Dateien (je Wurzelordner) -
+    // werden vor pruneStale per touchIndexed als "gesehen" markiert, sonst
+    // haelt pruneStale sie faelschlich fuer verwaist und loescht sie.
+    private static java.util.List<String> seenUnchanged = new java.util.ArrayList<>();
     static volatile String currentPath = "";
     // Aktuell durchlaufener ORDNER (unabhaengig von der Datei). Wichtig fuers
     // Diagnose-Protokoll: bei einem Ordner-Amoklauf (Pfad-Alias-Ring) haengt
@@ -143,8 +147,24 @@ final class SearchIndexer {
                                 + "statt /storage/emulated).");
                         continue;
                     }
+                    seenUnchanged = new java.util.ArrayList<>();
                     walk(store, rootDir, 0);
-                    if (!stopRequested) store.pruneStale(root, runStart);
+                    if (!stopRequested) {
+                        // Unveraenderte Dateien als "in diesem Lauf gesehen"
+                        // markieren (indexed_at >= runStart), damit pruneStale
+                        // sie NICHT als verwaist loescht. Ohne das leerte jeder
+                        // Lauf den halben Index und baute ihn neu auf - und das
+                        // FTS-Massenloeschen brachte den Lauf zum Haengen.
+                        store.touchIndexed(seenUnchanged, runStart);
+                        // Vor dem Aufraeumen den zuletzt gelaufenen Dateipfad
+                        // loeschen: sonst wuerde ein Haenger in pruneStale
+                        // faelschlich die letzte gewalkte Datei als
+                        // "problematisch" markieren (currentPath wird in
+                        // pruneStale nicht aktualisiert). currentDir bleibt der
+                        // Wurzelordner - der ist dann der sinnvolle Verursacher.
+                        currentPath = "";
+                        store.pruneStale(root, runStart);
+                    }
                 }
                 DiagLog.log(app, "Phase 1 (Metadaten) " + (stopRequested ? "gestoppt" : "fertig")
                         + ": " + scanned + " Dateien erfasst, " + pendingExtract.size()
@@ -210,6 +230,10 @@ final class SearchIndexer {
                     lastAdvance = System.currentTimeMillis();
                     continue;
                 }
+                // Kein Fortschritt seit dem letzten Herzschlag -> Stack des
+                // Worker-Threads festhalten (zeigt die genaue haengende Stelle,
+                // z.B. Files.readAttributes vs. SQLite). Geht auch nach logcat.
+                logWorkerStack(app, worker, "kein Fortschritt seit letztem Herzschlag");
                 if (System.currentTimeMillis() - lastAdvance >= STALL_MS) {
                     // Bei einem Ordner-Hänger ist currentPath leer -> dann den
                     // Ordner als Verursacher merken/melden.
@@ -234,6 +258,20 @@ final class SearchIndexer {
         }, "EdgeTabSearchWatchdog");
         wd.setDaemon(true);
         wd.start();
+    }
+
+    /** Haelt den aktuellen Stack des Indizierer-Threads im Diagnose-Protokoll
+     *  fest (und damit auch in logcat). Zeigt bei einem Haenger die exakte
+     *  blockierende Stelle - ohne Debug-Build/Root. */
+    private static void logWorkerStack(Context app, Thread worker, String warum) {
+        if (worker == null) return;
+        try {
+            StringBuilder sb = new StringBuilder("Indizierer-Stack (" + warum + "):");
+            StackTraceElement[] st = worker.getStackTrace();
+            if (st == null || st.length == 0) { sb.append(" (leer)"); }
+            else for (int i = 0; i < Math.min(st.length, 18); i++) sb.append("\n    at ").append(st[i]);
+            DiagLog.log(app, sb.toString());
+        } catch (Throwable ignored) {}
     }
 
     // Kanonische Pfade bereits besuchter Ordner - Android haengt an mehreren
@@ -361,8 +399,10 @@ final class SearchIndexer {
             SearchStore.KnownState known = store.known(f.getPath());
             boolean unchanged = known.mtime == mtime && known.size == size;
             if (unchanged) {
-                // Unveraendert. Metadaten stehen schon. Nur wenn noch Inhalt
-                // gewuenscht ist und fehlt -> fuer Phase 2 vormerken.
+                // Unveraendert. Metadaten stehen schon. Als "in diesem Lauf
+                // gesehen" merken, damit pruneStale sie nicht loescht.
+                seenUnchanged.add(f.getPath());
+                // Nur wenn noch Inhalt gewuenscht ist und fehlt -> fuer Phase 2.
                 if (wantContent && !known.contentOk) pendingExtract.add(f.getPath());
                 scanned++;
                 return;

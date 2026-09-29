@@ -229,6 +229,34 @@ public class SearchStore extends SQLiteOpenHelper {
         return out;
     }
 
+    /** Markiert die angegebenen (in diesem Lauf angetroffenen, aber
+     *  unveraenderten) Dateien als "gesehen", indem indexed_at auf ts gesetzt
+     *  wird. OHNE das hielte {@link #pruneStale} jede unveraenderte Datei fuer
+     *  verwaist (ihr indexed_at bliebe < runStart) und wuerde sie loeschen -
+     *  inklusive des teuren FTS-Loeschens ihres Volltexts, was den Lauf zum
+     *  Haengen brachte. path ist PRIMARY KEY, das UPDATE ist guenstig; in
+     *  Bloecken und einer Transaktion (nicht tausende Einzel-Commits). */
+    public void touchIndexed(java.util.List<String> paths, long ts) {
+        if (paths == null || paths.isEmpty()) return;
+        SQLiteDatabase db = getWritableDatabase();
+        final int CHUNK = 400; // unter SQLites Variablenlimit (999)
+        db.beginTransaction();
+        try {
+            for (int i = 0; i < paths.size(); i += CHUNK) {
+                java.util.List<String> part = paths.subList(i, Math.min(i + CHUNK, paths.size()));
+                StringBuilder ph = new StringBuilder();
+                for (int k = 0; k < part.size(); k++) ph.append(k == 0 ? "?" : ",?");
+                String[] args = new String[part.size() + 1];
+                args[0] = String.valueOf(ts);
+                for (int k = 0; k < part.size(); k++) args[k + 1] = part.get(k);
+                db.execSQL("UPDATE files SET indexed_at=? WHERE path IN (" + ph + ")", args);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     /** Alle Eintraege zu Pfaden entfernen, die beim letzten Durchlauf nicht
      *  mehr angetroffen wurden (geloeschte/verschobene Dateien) - alles
      *  unterhalb eines der gerade durchsuchten Wurzelordner, aelter als
@@ -247,16 +275,24 @@ public class SearchStore extends SQLiteOpenHelper {
         while (c.moveToNext()) stale.add(c.getString(0));
         c.close();
         if (stale.isEmpty()) return;
-        // In EINER Transaktion loeschen. Vorher lief jedes delete() als eigene
-        // Auto-Commit-Transaktion - bei vielen verwaisten Eintraegen (im
-        // Extremfall der ganze Index) tausende einzelne Commits, minutenlang,
-        // das Telefon wurde warm. Als Block ist das um Groessenordnungen
-        // schneller und kuehler.
+        // In Bloecken mit "path IN (...)" loeschen, in EINER Transaktion.
+        // Wichtig: ein DELETE auf der FTS4-Tabelle ist ein Komplettscan des
+        // Volltexts (path ist dort keine indizierte Spalte). Frueher lief das
+        // PRO verwaister Datei in einer Schleife -> O(N x Indexgroesse), bei
+        // vielen Verwaisten und grossen Buchtexten ein minutenlanger Haenger
+        // (der Watchdog beschuldigte dann faelschlich die zuletzt gemerkte
+        // Datei). Ein Block-DELETE scannt den Volltext nur EINMAL je Block
+        // statt einmal je Datei - um Groessenordnungen schneller und kuehler.
+        final int CHUNK = 400; // unter SQLites Variablenlimit (999)
         db.beginTransaction();
         try {
-            for (String p : stale) {
-                db.delete("files", "path=?", new String[]{p});
-                db.delete("content_fts", "path=?", new String[]{p});
+            for (int i = 0; i < stale.size(); i += CHUNK) {
+                List<String> part = stale.subList(i, Math.min(i + CHUNK, stale.size()));
+                StringBuilder ph = new StringBuilder();
+                for (int k = 0; k < part.size(); k++) ph.append(k == 0 ? "?" : ",?");
+                String[] args = part.toArray(new String[0]);
+                db.delete("files", "path IN (" + ph + ")", args);
+                db.delete("content_fts", "path IN (" + ph + ")", args);
             }
             db.setTransactionSuccessful();
         } finally {
