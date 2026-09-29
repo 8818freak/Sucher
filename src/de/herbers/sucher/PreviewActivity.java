@@ -522,11 +522,15 @@ public class PreviewActivity extends Activity {
 
         if (!pr.kf8) {
             // Klassisches MOBI6: die Text-Records enthalten meist schon
-            // fertiges HTML - direkt in einer WebView anzeigen.
+            // fertiges HTML - direkt in einer WebView anzeigen. Das Titelbild
+            // (falls vorhanden) wird als data:-URI vorangestellt.
             WebView web = new WebView(this);
             web.getSettings().setJavaScriptEnabled(false);
             web.setWebViewClient(fileLinkClient()); // dieselbe Absicherung wie bei EPUB, siehe dort
-            web.loadDataWithBaseURL(null, pr.html, "text/html", "utf-8", null);
+            String html = pr.html;
+            String coverImg = coverDataImg(pr.cover);
+            if (coverImg != null) html = coverImg + html;
+            web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
             return web;
         }
 
@@ -534,6 +538,8 @@ public class PreviewActivity extends Activity {
         // Text statt eines nachgebauten HTML-Renderers.
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
+        ImageView coverView = coverImageView(pr.cover);
+        if (coverView != null) box.addView(coverView);
         TextView note = new TextView(this);
         note.setText("Dieses Format (AZW3/KF8) zeigt hier nur reinen Text, ohne Kapitel-Formatierung.");
         note.setTextColor(Color.parseColor("#8899AA"));
@@ -542,6 +548,40 @@ public class PreviewActivity extends Activity {
         box.addView(note);
         box.addView(scrollableText(pr.html));
         return box;
+    }
+
+    /** MIME-Typ eines rohen Bildes anhand der Magic-Bytes (JPEG/PNG/GIF). */
+    private static String imageMime(byte[] b) {
+        if (b == null || b.length < 4) return null;
+        if ((b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8) return "image/jpeg";
+        if ((b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') return "image/png";
+        if (b[0] == 'G' && b[1] == 'I' && b[2] == 'F') return "image/gif";
+        return null;
+    }
+
+    /** Titelbild als zentriertes <img>-HTML mit data:-URI, oder null. */
+    private static String coverDataImg(byte[] cover) {
+        String mime = imageMime(cover);
+        if (mime == null) return null;
+        String b64 = android.util.Base64.encodeToString(cover, android.util.Base64.NO_WRAP);
+        return "<div style=\"text-align:center;margin:0 0 1em 0\">"
+                + "<img src=\"data:" + mime + ";base64," + b64
+                + "\" style=\"max-width:100%;height:auto\"/></div>";
+    }
+
+    /** Titelbild als ImageView (fuer die KF8-Text-Ansicht), oder null. */
+    private ImageView coverImageView(byte[] cover) {
+        if (imageMime(cover) == null) return null;
+        Bitmap bmp = BitmapFactory.decodeByteArray(cover, 0, cover.length);
+        if (bmp == null) return null;
+        ImageView iv = new ImageView(this);
+        iv.setImageBitmap(bmp);
+        iv.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(dp(14), dp(12), dp(14), dp(8));
+        iv.setLayoutParams(lp);
+        return iv;
     }
 
     // ---------- Office (nur statisches Vorschaubild, kein Seiten-Renderer) ----------

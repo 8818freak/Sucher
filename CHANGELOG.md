@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.40
+- Neu: In der MOBI-Vorschau wird jetzt das Titelbild (Cover) ganz am Anfang
+  angezeigt, falls das Buch eines enthält – vor dem Text.
+
 ## 0.39
 - Behoben (kritisch): Nach dem 0.37-Umbau lief die Suche in einem einzelnen
   Hintergrund-Thread ohne Trefferbegrenzung. Eine sehr häufige Suche (z. B.
