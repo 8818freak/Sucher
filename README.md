@@ -1,8 +1,10 @@
 # Sucher
 
 A standalone Android device-search app: full-text search across files
-(TXT/MD, Office DOCX/XLSX/PPTX and legacy DOC/XLS/PPT, PDF, EPUB/FB2,
-MOBI/AZW3), plus contacts and calendar events, in one search field.
+(TXT/MD, Office DOCX/XLSX/PPTX and legacy DOC/XLS/PPT, OpenDocument
+ODT/ODS/ODP, PDF, EPUB/FB2, MOBI/AZW3, and optionally the contents of
+ZIP/7z/TAR archives), plus contacts, calendar events, SMS and the call log,
+in one search field.
 
 Split off from [EdgeTab](../../EdgeTab/) on 2026-09-24, where it started as
 a tab before turning out to deserve its own app (different permission
@@ -39,15 +41,24 @@ narrowed down step by step instead of building one giant combined query.
 |---|---|---|
 | TXT/MD/CSV/JSON/XML/etc. | direct read | |
 | DOCX/XLSX/PPTX | ZIP+XML via Android's built-in `XmlPullParser` | no Apache POI needed |
+| ODT/ODS/ODP (OpenDocument) | same (meta.xml + content.xml) | LibreOffice/OpenOffice |
 | EPUB/FB2 | same | |
 | PDF | PDFBox-Android | encrypted PDFs: filename only, not decrypted |
 | DOC/XLS/PPT (legacy) | Apache POI (`poi`+`poi-scratchpad` only, no `poi-ooxml`) | |
 | MOBI/AZW3/AZW/PRC | hand-rolled PalmDOC/MOBI6 reader | HUFF/CDIC-compressed books: filename only; DRM books: filename only, by design |
 | CBZ | filename + `ComicInfo.xml` metadata if present | |
 | CBR | filename only | no RAR reader vendored, not worth it just for metadata |
+| ZIP/7z/TAR(.gz/.bz2/.xz), single .gz/.bz2/.xz | contents indexed (each inner document extracted) | optional, off by default ("search archives"); RAR filename only (no free GPL-compatible decompressor) |
 
 Every file gets a metadata row regardless of format, so name/type/date
 search covers everything, not just the table above.
+
+Besides files, Sucher also searches **contacts, calendar events, SMS and the
+call log** (each a separate result category, queried live — nothing stored),
+and **captured notifications** (opt-in via notification access; already-captured
+ones stay searchable even after the permission is revoked, and can be deleted
+under "Permissions"). SMS and call log need their own permissions, granted on
+demand.
 
 ## Building
 
