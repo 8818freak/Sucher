@@ -205,7 +205,29 @@ public class MainActivity extends Activity {
         scroll.addView(root);
         setContentView(scroll);
 
+        handleIncomingQuery(getIntent());
         rebuild();
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (handleIncomingQuery(intent)) rebuild();
+    }
+
+    /** Von aussen mit einem Suchbegriff gestartet (z.B. EdgeTabs „In Sucher
+     *  suchen"): Begriff uebernehmen und die einfache Suche vorbelegen. Nimmt
+     *  sowohl einen eigenen Extra ("query") als auch ACTION_SEARCH entgegen. */
+    private boolean handleIncomingQuery(android.content.Intent intent) {
+        if (intent == null) return false;
+        String q = intent.getStringExtra("query");
+        if (q == null) q = intent.getStringExtra(android.app.SearchManager.QUERY);
+        if (q == null || q.trim().isEmpty()) return false;
+        lastQuery = q.trim();
+        lastSearchWasAdvanced = false;
+        showSettings = false;
+        return true;
     }
 
     @Override
