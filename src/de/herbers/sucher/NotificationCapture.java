@@ -53,12 +53,18 @@ public class NotificationCapture extends NotificationListenerService {
         String label = Notifications.appLabel(this, pkg);
         String finalText = text;
         long postTime = sbn.getPostTime();
+        // Vollstaendigen, verlustfreien Abzug der Benachrichtigung mitspeichern
+        // (auch Felder, die die Suche selbst nicht auswertet) - siehe
+        // Notifications.toJson. Auf dem Main-Thread berechnen, solange die
+        // Benachrichtigung/Extras sicher gueltig sind; nur die DB-Schreibung
+        // wandert in den Hintergrund-Thread.
+        String infoJson = Notifications.toJson(sbn, n);
         // onNotificationPosted runs on the main thread; addNotification() hits
         // SQLite, which can block waiting for a connection while SearchIndexer
         // is mid-run (observed as ANRs: "Input dispatching timed out" with the
         // main thread stuck in SQLiteConnectionPool.waitForConnection).
         new Thread(() ->
-            SearchStore.get(this).addNotification(pkg, label, title, finalText, postTime)
+            SearchStore.get(this).addNotification(pkg, label, title, finalText, postTime, infoJson)
         ).start();
     }
 }

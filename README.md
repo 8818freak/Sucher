@@ -57,7 +57,10 @@ Besides files, Sucher also searches **contacts, calendar events, SMS and the
 call log** (each a separate result category, queried live — nothing stored),
 and **captured notifications** (opt-in via notification access; already-captured
 ones stay searchable even after the permission is revoked, and can be deleted
-under "Permissions"). SMS and call log need their own permissions, granted on
+under "Permissions"). Each captured notification is stored **losslessly** —
+every field it carried, via the shared library's `Notifications.toJson`, not
+just title and one line — so the full text is searchable and any field can be
+evaluated later. SMS and call log need their own permissions, granted on
 demand.
 
 ## Building

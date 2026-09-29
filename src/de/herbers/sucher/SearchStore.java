@@ -22,7 +22,7 @@ import java.util.List;
 public class SearchStore extends SQLiteOpenHelper {
 
     private static final String DB = "edgetab_search.db";
-    private static final int VERSION = 3;
+    private static final int VERSION = 4;
     private static SearchStore instance;
 
     public static synchronized SearchStore get(Context ctx) {
@@ -102,7 +102,8 @@ public class SearchStore extends SQLiteOpenHelper {
             "  app_label TEXT," +
             "  title TEXT," +
             "  text TEXT," +
-            "  posted INTEGER" +
+            "  posted INTEGER," +
+            "  info_json TEXT" +   // vollstaendiger, verlustfreier Abzug (Notifications.toJson)
             ")");
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notif_posted ON notifications(posted)");
         db.execSQL("CREATE VIRTUAL TABLE IF NOT EXISTS notif_fts USING fts4(nid, title, body)");
@@ -120,6 +121,12 @@ public class SearchStore extends SQLiteOpenHelper {
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_files_created ON files(created)");
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_files_author ON files(author)");
             db.execSQL("CREATE INDEX IF NOT EXISTS idx_files_series ON files(series)");
+        }
+        // Wenn die notifications-Tabelle schon bestand (oldV>=2), ihr die neue
+        // info_json-Spalte nachruesten. Bei oldV<2 hat createNotifTables sie
+        // oben bereits MIT dieser Spalte angelegt - dann NICHT erneut altern.
+        if (oldV >= 2 && oldV < 4) {
+            db.execSQL("ALTER TABLE notifications ADD COLUMN info_json TEXT");
         }
     }
 
@@ -482,7 +489,8 @@ public class SearchStore extends SQLiteOpenHelper {
      *  einen Schluessel wie bei EdgeTabs NotificationStore (Sucher braucht
      *  keine Antworten-/Loeschen-Aktionen, nur den Text durchsuchbar zu
      *  machen) - grobe Inhaltsgleichheit reicht, um Update-Spam zu vermeiden. */
-    public void addNotification(String pkg, String appLabel, String title, String text, long posted) {
+    public void addNotification(String pkg, String appLabel, String title, String text, long posted,
+                                String infoJson) {
         if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) return;
         SQLiteDatabase db = getWritableDatabase();
         Cursor dup = db.rawQuery(
@@ -497,6 +505,7 @@ public class SearchStore extends SQLiteOpenHelper {
         v.put("title", title);
         v.put("text", text);
         v.put("posted", posted);
+        v.put("info_json", infoJson);
         long id = db.insert("notifications", null, v);
         if (id >= 0) {
             ContentValues fv = new ContentValues();
@@ -510,6 +519,7 @@ public class SearchStore extends SQLiteOpenHelper {
     public static class NotifHit {
         public String pkg, appLabel, title, text, snippet;
         public long posted;
+        public String infoJson;   // vollstaendiger Abzug (kann null sein bei Alt-Eintraegen)
     }
 
     public List<NotifHit> searchNotifications(String query, int limit) {
@@ -520,7 +530,7 @@ public class SearchStore extends SQLiteOpenHelper {
             String ftsQuery = ftsEscape(query.trim());
             Cursor c = db.rawQuery(
                     "SELECT n.pkg, n.app_label, n.title, n.text, n.posted, "
-                    + "snippet(notif_fts, '', '', '…', -1, 40) "
+                    + "snippet(notif_fts, '', '', '…', -1, 40), n.info_json "
                     + "FROM notif_fts JOIN notifications n ON n._id = CAST(notif_fts.nid AS INTEGER) "
                     + "WHERE notif_fts MATCH ? ORDER BY n.posted DESC LIMIT ?",
                     new String[]{ftsQuery, String.valueOf(limit)});
@@ -532,6 +542,7 @@ public class SearchStore extends SQLiteOpenHelper {
                 h.text = c.getString(3);
                 h.posted = c.getLong(4);
                 h.snippet = c.getString(5);
+                h.infoJson = c.getString(6);
                 out.add(h);
             }
             c.close();

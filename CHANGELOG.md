@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.51
+- Neu: Jede mitgeschnittene Benachrichtigung wird jetzt **verlustfrei**
+  gespeichert – alle Felder, die sie mitbrachte (über die Bibliothek
+  `Notifications.toJson`), nicht mehr nur Titel und Text. Der volle Text bleibt
+  durchsuchbar und jedes Feld später auswertbar.
+
 ## 0.50
 - Verbessert: Anruf-Farben – grün = erfolgreich, rot = verpasst, blau =
   vergeblich (abgehend, niemanden erreicht).
