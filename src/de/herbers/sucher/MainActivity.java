@@ -795,7 +795,7 @@ public class MainActivity extends Activity {
         EXT_CATS.put("Bilder", new String[][]{{"bmp","Bild (BMP)"},{"gif","Bild (GIF)"},{"jpg","Bild (JPEG)"},{"png","Bild (PNG)"},{"webp","Bild (WebP)"}});
         EXT_CATS.put("Audio", new String[][]{{"aac","Audio (AAC)"},{"flac","Audio (FLAC)"},{"m4a","Audio (M4A)"},{"mp3","Audio (MP3)"},{"ogg","Audio (OGG Vorbis)"},{"opus","Audio (Opus)"},{"wav","Audio (WAV)"},{"wma","Audio (WMA)"}});
         EXT_CATS.put("Video", new String[][]{{"avi","Video (AVI)"},{"mkv","Video (MKV)"},{"mov","Video (QuickTime)"},{"mp4","Video (MP4)"},{"webm","Video (WebM)"}});
-        EXT_CATS.put("Archive", new String[][]{{"7z","Archiv (7-Zip)"},{"bz2","Bzip2-Datei / TAR.BZ2"},{"gz","Gzip-Datei / TAR.GZ"},{"rar","Archiv (RAR, nur RAR4)"},{"tar","Archiv (TAR)"},{"tgz","Archiv (TAR.GZ)"},{"xz","XZ-Datei / TAR.XZ"},{"zip","Archiv (ZIP)"}});
+        EXT_CATS.put("Archive", new String[][]{{"7z","Archiv (7-Zip)"},{"bz2","Bzip2-Datei / TAR.BZ2"},{"gz","Gzip-Datei / TAR.GZ"},{"rar","Archiv (RAR, nur Name)"},{"tar","Archiv (TAR)"},{"tgz","Archiv (TAR.GZ)"},{"xz","XZ-Datei / TAR.XZ"},{"zip","Archiv (ZIP)"}});
         EXT_CATS.put("Web & Daten", new String[][]{{"html","Webseite (HTML)"},{"json","JSON-Datei"},{"xml","XML-Datei"}});
     }
 
@@ -1997,9 +1997,10 @@ public class MainActivity extends Activity {
         arcHint.setText("An: Der Volltext eines Archivs umfasst auch die Texte der Dokumente darin "
                 + "(PDF, Office, E-Books …) – so findest du ein Archiv über seinen Inhalt. "
                 + "Unterstützt: ZIP, 7z, TAR (auch .gz/.bz2/.xz) und einzeln komprimierte "
-                + "Dateien (z. B. bericht.pdf.gz). RAR nur im älteren RAR4-Format – moderne "
-                + "RAR5-Archive lassen sich mit freien Bibliotheken nicht entpacken. "
-                + "Kostet beim Indizieren spürbar mehr Zeit, weil "
+                + "Dateien (z. B. bericht.pdf.gz). RAR nur dem Namen nach (es gibt keinen "
+                + "freien, GPL-kompatiblen RAR-Entpacker) – RAR-Inhalte findest du, indem du "
+                + "das Archiv einmal als ZIP oder 7z neu packst. Kostet beim Indizieren "
+                + "spürbar mehr Zeit, weil "
                 + "jedes enthaltene Dokument entpackt und einzeln ausgelesen wird. Nur in Ordnern "
                 + "mit „Inhalt durchsuchbar“.");
         arcHint.setTextColor(Color.parseColor("#8899AA"));

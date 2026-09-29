@@ -544,7 +544,7 @@ final class SearchIndexer {
     // wenn der teure Schalter "Archive durchsuchen" an ist (Settings.indexArchives).
     // RAR ist bewusst nicht dabei: ohne freien Entpacker bleibt es beim Namen.
     static final java.util.Set<String> ARCHIVE_EXT_SET = new java.util.HashSet<>(
-            java.util.Arrays.asList("zip", "7z", "rar", "tar",
+            java.util.Arrays.asList("zip", "7z", "tar",
                     "tgz", "tbz", "tbz2", "txz", "gz", "bz2", "xz"));
     private static boolean isArchive(String ext) { return ARCHIVE_EXT_SET.contains(ext); }
     private static final java.util.Set<String> SUPPORTED_EXT_SET =
