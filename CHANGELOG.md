@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.46
+- Klarer formuliert: Der Benachrichtigungszugriff schneidet Benachrichtigungen
+  erst AB dem Erteilen mit; schon erfasste bleiben auch nach Entzug in der
+  Datenbank durchsuchbar.
+- Neu: Unter „Berechtigungen“ lassen sich die zugehörigen Daten gezielt löschen –
+  „Datei-Index löschen“ und „Erfasste Benachrichtigungen löschen“, jeweils mit
+  Sicherheitsabfrage. (Kontakte/Termine werden live abgefragt, nichts gespeichert.)
+
 ## 0.45
 - Neu: Erinnerung, wenn eine einmal erteilte Berechtigung fehlt (Alle Dateien,
   Benachrichtigungszugriff, Kontakte, Termine) – z. B. nach einem System-Update.

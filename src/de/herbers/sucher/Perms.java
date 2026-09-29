@@ -40,7 +40,10 @@ final class Perms {
                 "Um deine Dateien zu durchsuchen und zu indizieren – die Grundlage der App."));
         l.add(new PermReminder.Perm("notif", "Benachrichtigungszugriff", notif(ctx),
                 new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"),
-                "Um auch mitgeschnittene Benachrichtigungen durchsuchbar zu machen (optional)."));
+                "Ab dem Erteilen werden eingehende Benachrichtigungen mitgeschnitten und "
+                + "durchsuchbar. Schon erfasste bleiben auch nach Entzug der Berechtigung in "
+                + "der Datenbank und weiter durchsuchbar (siehe „Erfasste Benachrichtigungen "
+                + "löschen“). Optional."));
         l.add(new PermReminder.Perm("contacts", "Kontakte", con, appDetails(ctx),
                 "Um Kontakte in die Suche einzubeziehen (optional)."));
         l.add(new PermReminder.Perm("calendar", "Termine", cal, appDetails(ctx),

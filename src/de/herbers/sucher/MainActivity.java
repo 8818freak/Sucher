@@ -1760,7 +1760,41 @@ public class MainActivity extends Activity {
                 }
             });
             root.addView(go);
+
+            // Zugehoerige, in der Datenbank gespeicherte Daten gezielt loeschen
+            // (mit Sicherheitsabfrage). Kontakte/Termine werden live abgefragt -
+            // dafuer gibt es nichts zu loeschen.
+            Runnable clear = null; String clearLabel = null;
+            if ("storage".equals(perm.key)) {
+                clearLabel = "Datei-Index löschen";
+                clear = () -> SearchStore.get(this).clearAll();
+            } else if ("notif".equals(perm.key)) {
+                clearLabel = "Erfasste Benachrichtigungen löschen";
+                clear = () -> SearchStore.get(this).clearNotifications();
+            }
+            if (clear != null) {
+                Button del = new Button(this);
+                del.setText(clearLabel);
+                del.setTextColor(Color.parseColor("#E06666"));
+                final Runnable c = clear; final String lbl = clearLabel;
+                del.setOnClickListener(v -> confirmClear(lbl, c));
+                root.addView(del);
+            }
         }
+    }
+
+    /** Sicherheitsabfrage vor dem Loeschen von Datenbank-Inhalten. */
+    private void confirmClear(String what, Runnable action) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Wirklich löschen?")
+                .setMessage("„" + what + "“ – das lässt sich nicht rückgängig machen.")
+                .setNegativeButton("Abbrechen", null)
+                .setPositiveButton("Löschen", (dlg, w) -> {
+                    try { action.run(); Toast.makeText(this, "Gelöscht.", Toast.LENGTH_SHORT).show(); }
+                    catch (Throwable t) { Toast.makeText(this, "Löschen fehlgeschlagen.", Toast.LENGTH_SHORT).show(); }
+                    rebuild();
+                })
+                .show();
     }
 
     static boolean hasStoragePermission() {

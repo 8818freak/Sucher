@@ -602,9 +602,18 @@ public class SearchStore extends SQLiteOpenHelper {
         return n;
     }
 
+    /** Datei-Index leeren (alle indizierten Dateien + Volltext). Der naechste
+     *  Indizierlauf baut ihn neu auf. */
     public void clearAll() {
         SQLiteDatabase db = getWritableDatabase();
         db.delete("files", null, null);
         db.delete("content_fts", null, null);
+    }
+
+    /** Alle mitgeschnittenen Benachrichtigungen (inkl. Volltext) loeschen. */
+    public void clearNotifications() {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete("notifications", null, null);
+        db.delete("notif_fts", null, null);
     }
 }
