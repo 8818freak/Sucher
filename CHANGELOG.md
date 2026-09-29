@@ -5,6 +5,10 @@ als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
 ## 0.36
+- Behoben: MOBI-Texte hatten falsche Sonderzeichen (Mojibake: „ü" wurde zu
+  „Ã¼", „©" zu „Â©") – im Volltext-Index und in der Vorschau. Der Text wird
+  jetzt mit dem im MOBI deklarierten Zeichensatz dekodiert (UTF-8 bzw.
+  Windows-1252) statt fest als Latin-1.
 - Behoben: MOBI-Titelbilder erschienen nie. Die Cover-Erkennung verließ sich auf
   ein MOBI-Kopf-Feld, das in vielen Dateien 0/unzuverlässig ist; jetzt wird der
   erste eingebettete Bild-Record gesucht (mit Fallback). MOBIs, die ein Cover
