@@ -2194,18 +2194,13 @@ public class MainActivity extends Activity {
      *  bereits tatsaechlich beobachteten Absendern (deckt die wenigen Faelle
      *  ohne eigenes Startsymbol ab). Sortiert nach Anzeigename. */
     private List<String[]> allNotifyCapableApps() {
-        PackageManager pm = getPackageManager();
+        // Startbare Apps (mit Label, ohne die eigene) aus der gemeinsamen
+        // Bibliothek de.herbers.common.Apps; danach bereits beobachtete
+        // Absender (auch ohne Startsymbol) ergaenzen.
         java.util.TreeMap<String, String[]> sorted = new java.util.TreeMap<>();
-        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
-        java.util.List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(main, 0);
         int idx = 0;
-        if (apps != null) for (android.content.pm.ResolveInfo ri : apps) {
-            if (ri.activityInfo == null) continue;
-            String pkg = ri.activityInfo.packageName;
-            if (pkg.equals(getPackageName())) continue;
-            String label;
-            try { label = ri.loadLabel(pm).toString(); } catch (Throwable t) { label = pkg; }
-            sorted.put(label.toLowerCase(java.util.Locale.ROOT) + "" + (idx++), new String[]{pkg, label});
+        for (String[] row : de.herbers.common.Apps.launchable(this)) {
+            sorted.put(row[1].toLowerCase(java.util.Locale.ROOT) + "\u001f" + (idx++), row);
         }
         for (String[] row : SearchStore.get(this).distinctNotifPackages()) {
             String pkg = row[0];
@@ -2213,7 +2208,7 @@ public class MainActivity extends Activity {
             for (String[] v : sorted.values()) if (v[0].equals(pkg)) { known = true; break; }
             if (known) continue;
             String label = row[1] == null || row[1].isEmpty() ? pkg : row[1];
-            sorted.put(label.toLowerCase(java.util.Locale.ROOT) + "" + (idx++), new String[]{pkg, label});
+            sorted.put(label.toLowerCase(java.util.Locale.ROOT) + "\u001f" + (idx++), new String[]{pkg, label});
         }
         return new ArrayList<>(sorted.values());
     }

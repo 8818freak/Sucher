@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.32
+- Intern: Die Aufzählung wählbarer Benachrichtigungsquellen (alle startbaren
+  Apps) kommt jetzt aus der gemeinsamen Bibliothek herbers-android-common
+  (de.herbers.common.Apps) statt aus eigenem Code – dieselbe Logik wie in
+  EdgeTab. Keine sichtbare Änderung.
+
 ## 0.31
 - Intern: Das Mitschneiden der Benachrichtigungen (Titel/Text-Auslesen inkl.
   BigText, Gruppen-/Leer-Filter, App-Name) nutzt jetzt den gemeinsamen Kern der
