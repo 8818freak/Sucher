@@ -4,6 +4,43 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.29
+- Große Medien-Ordner (Fotos, Musik, Videos) werden jetzt zuverlässig
+  mitindiziert. Vorher blieb der Indizierlauf im riesigen Bücher-Ordner hängen
+  (teure Inhalts- und Titelbild-Erfassung je Datei) und erreichte Ordner wie
+  „photos" NIE – eine Suche darin fand 0 Treffer, obwohl tausende passende
+  Dateien existierten. Ursachen und Lösung:
+  - Zweiphasige Indizierung: Phase 1 erfasst blitzschnell nur Metadaten
+    (Name/Typ/Größe/Datum) für ALLE Dateien – so ist jede Datei sofort per
+    Namenssuche auffindbar, auch die in großen Medien-Ordnern. Phase 2 holt
+    danach Inhalt/Titel/Autor in Tranchen, Phase 3 die Titelbilder in Tranchen
+    (Titelbilder entstehen außerdem bei Bedarf beim Anzeigen).
+  - Ein teurer FTS-Komplettscan beim Schreiben jeder neuen Datei (Löschen einer
+    evtl. alten Volltext-Zeile durchsuchte die komplette Volltext-Tabelle –
+    Gigabytes) wird nur noch ausgeführt, wenn die Datei wirklich schon Volltext
+    hatte. Das beschleunigt die Erfassung neuer Dateien um Größenordnungen.
+  - Hintergrund-Indizierung wurde vom System teils nach Sekunden gestoppt und
+    kam nie über die Bücher hinaus; durch die schnelle Phase 1 macht nun selbst
+    ein kurzes Zeitfenster großen Fortschritt. Für einen sofortigen
+    Vollabgleich einmal „Jetzt neu indizieren" ausführen.
+  - Die Fortschrittsanzeige zeigt jetzt die aktuelle Phase.
+- Ersetzte Dateien (gleicher Name) werden zuverlässig neu erfasst: Änderungen
+  werden an der Änderungszeit ODER der Dateigröße erkannt (manche Ersetzungen
+  behalten die alte Änderungszeit).
+- Keine künstliche Trefferbegrenzung mehr (vorher 60 je Zweig – bei großen
+  Sammlungen wurde vieles abgeschnitten). Die Ergebniskarte zeigt die volle
+  Anzahl im Kopf und lädt die Zeilen schrittweise per „Mehr anzeigen" (in
+  50er-Schritten, ohne Deckel) – so bleibt auch eine sehr große Trefferliste
+  flüssig.
+- Bild-Vorschauen erscheinen zügiger: Titelbilder werden beim Anzeigen jetzt
+  mit mehreren Threads parallel erzeugt (vorher nur einer, dadurch blieben in
+  Bildordnern lange nur die Datei-Symbole stehen).
+- Neuer Schalter „Vorschaubilder dauerhaft speichern": An (Standard) legt sie im
+  app-internen Speicher ab – sie überleben ein „Cache leeren" (System und
+  Werkzeuge wie SD Maid) und werden nicht ständig neu erzeugt. Aus legt sie wie
+  bisher im Cache ab (darf bei Speichernot geräumt werden). In beiden Fällen
+  liegen sie NICHT in der Datenbank – die Sicherung bleibt schlank.
+
 ## 0.28
 - Neu: In einem bestimmten Ordner (samt Unterordnern) suchen – Knopf
   „📁 In Ordner suchen…" über einen kleinen Ordner-Browser; ein blaues Banner

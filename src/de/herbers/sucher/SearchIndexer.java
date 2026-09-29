@@ -34,6 +34,11 @@ final class SearchIndexer {
     private static volatile boolean stopRequested = false;
     static volatile int scanned = 0;
     static volatile int contentIndexed = 0;
+    static volatile int thumbsMade = 0;
+    // Aktuelle Phase: 1 = Metadaten, 2 = Inhalt, 3 = Titelbilder.
+    static volatile int phase = 0;
+    // In Phase 1 gesammelte Pfade, die in Phase 2 Inhalt/Titel/Autor brauchen.
+    private static java.util.List<String> pendingExtract = new java.util.ArrayList<>();
     static volatile String currentPath = "";
     // Aktuell durchlaufener ORDNER (unabhaengig von der Datei). Wichtig fuers
     // Diagnose-Protokoll: bei einem Ordner-Amoklauf (Pfad-Alias-Ring) haengt
@@ -84,7 +89,7 @@ final class SearchIndexer {
         if (running) return;
         running = true;
         stopRequested = false;
-        scanned = 0; contentIndexed = 0; currentPath = "";
+        scanned = 0; contentIndexed = 0; thumbsMade = 0; phase = 0; currentPath = "";
         Context app = ctx.getApplicationContext();
         contextApp = app;
         searchComicsMetaCached = Settings.searchComicsMeta(app);
@@ -113,19 +118,24 @@ final class SearchIndexer {
                     folders.add(norm);
                     if (Settings.contentIndexingEnabled(app, cf)) contentRootsCached.add(norm);
                 }
+                // ---- PHASE 1: Metadaten fuer ALLE Dateien (schnell) ----
+                // Nur Name/Typ/Groesse/Datum je Datei - keine (teure) Inhalts-
+                // oder Titelbild-Erfassung. So ist JEDE Datei sofort per
+                // Namenssuche auffindbar, auch die in grossen Medien-Ordnern
+                // (Fotos/Musik/...). Frueher blieb ein Lauf in der teuren
+                // Inhaltsextraktion des grossen Buecher-Ordners haengen und
+                // erreichte die Medien-Ordner nie (Mathias: "keine gefundene
+                // Datei liegt im photos-Pfad"). Inhalt (Phase 2) und Titelbilder
+                // (Phase 3) folgen danach in Tranchen (Mathias' Vorschlag).
+                phase = 1;
+                pendingExtract = new java.util.ArrayList<>();
                 for (String root : folders) {
                     if (stopRequested) break;
                     File rootDir = new File(root);
                     // WICHTIG: Nur laufen/aufraeumen, wenn der Wurzelordner
-                    // tatsaechlich lesbar ist. Ein nicht auflistbarer Ordner
-                    // (z.B. "/storage/emulated" selbst - Rechte drwxrws---, von
-                    // einer normalen App nicht listbar; zugaenglich ist erst
-                    // "/storage/emulated/0") liefert listFiles()==null. Frueher
-                    // lief dann trotzdem pruneStale und sortierte ALLE Eintraege
-                    // dieses Ordners als "verwaist" aus - zeilenweise, minuten-
-                    // lang, das Telefon wurde warm, und beim naechsten Lauf
-                    // musste alles neu indiziert werden. Jetzt: ueberspringen,
-                    // Index NICHT anfassen, deutlich ins Protokoll schreiben.
+                    // tatsaechlich lesbar ist (siehe Kommentar normalizeRoot):
+                    // ein nicht auflistbarer Ordner liefert listFiles()==null;
+                    // dann NICHT pruneStale (wuerde den Index faelschlich leeren).
                     if (!rootDir.isDirectory() || rootDir.listFiles() == null) {
                         DiagLog.log(app, "Wurzelordner »" + root + "« ist nicht lesbar bzw. kein "
                                 + "Verzeichnis – übersprungen, Index NICHT bereinigt. Bitte in den "
@@ -134,16 +144,26 @@ final class SearchIndexer {
                         continue;
                     }
                     walk(store, rootDir, 0);
-                    // Nur als vollstaendig behandeln (und Verschwundenes
-                    // entfernen), wenn der Ordner nicht durch einen Stopp
-                    // mittendrin abgebrochen wurde - sonst wuerden noch
-                    // nicht wieder erreichte Dateien faelschlich als
-                    // geloescht/verschoben aussortiert.
                     if (!stopRequested) store.pruneStale(root, runStart);
                 }
+                DiagLog.log(app, "Phase 1 (Metadaten) " + (stopRequested ? "gestoppt" : "fertig")
+                        + ": " + scanned + " Dateien erfasst, " + pendingExtract.size()
+                        + " für Inhalt/Metadaten vorgemerkt");
+
+                // ---- PHASE 2: Inhalt/Titel/Autor in Tranchen ----
+                extractPass(app, store);
+
+                // ---- PHASE 3: Titelbilder in Tranchen ----
+                // (Titelbilder entstehen zwar auch bei Bedarf beim Anzeigen -
+                //  hier werden die zuletzt geaenderten Dateien vorab in kleinen
+                //  Mengen je Lauf erfasst, damit sie beim Blaettern sofort da
+                //  sind. Bewusst gedeckelt, damit das Telefon nicht warm wird.)
+                thumbPass(app, store);
+
                 if (!stopRequested) Settings.setSearchLastRun(app, System.currentTimeMillis());
                 DiagLog.log(app, (stopRequested ? "Indizierlauf gestoppt" : "Indizierlauf fertig")
-                        + ": " + scanned + " geprüft, " + contentIndexed + " mit neuem Volltext");
+                        + ": " + scanned + " geprüft, " + contentIndexed + " mit neuem Volltext, "
+                        + thumbsMade + " neue Titelbilder");
             } catch (Throwable t) {
                 android.util.Log.w("EdgeTabSearch", "Indizierlauf abgebrochen", t);
                 StackTraceElement[] st = t.getStackTrace();
@@ -305,7 +325,7 @@ final class SearchIndexer {
                 if (f.isHidden() || f.getName().startsWith(".")) continue; // .thumbnails, .trash etc.
                 walk(store, f, depth + 1);
             } else {
-                indexOne(store, f);
+                indexMeta(store, f);
             }
         }
     }
@@ -317,65 +337,44 @@ final class SearchIndexer {
         return false;
     }
 
-    private static void indexOne(SearchStore store, File f) {
+    /** PHASE 1 je Datei: nur schnelle Metadaten (Name/Typ/Groesse/Datum), keine
+     *  Inhalts-/Titel-/Titelbild-Erfassung. Unveraenderte Dateien werden
+     *  uebersprungen; Dateien, die noch Inhalt/Titel brauchen, fuer Phase 2
+     *  vorgemerkt. Aenderung wird an mtime ODER Groesse erkannt (eine ersetzte
+     *  Datei behaelt manchmal die alte Aenderungszeit - dann verraet die andere
+     *  Groesse die Aenderung; Mathias' Fall mit einem ausgetauschten Buch). */
+    private static void indexMeta(SearchStore store, File f) {
         try {
             currentPath = f.getPath();
             long mtime = f.lastModified();
+            long size = f.length();
             String name = f.getName();
             String ext = extOf(name);
-            // isSupported() zuerst: fuer ein Format, das ohnehin nie Inhalt
-            // liefern kann (Fotos, Musik, Videos, APKs - die Mehrheit der
-            // Dateien auf jedem Geraet), darf "content_ok" in der DB (bleibt
-            // dort fuer immer 0) den Schnell-Ueberspringen-Pfad nicht
-            // blockieren - sonst wuerde JEDE nicht-Dokument-Datei bei JEDEM
-            // Lauf komplett neu verarbeitet, nie uebersprungen (gefunden, weil
-            // ein Lauf reproduzierbar bei einer .mp3 haengen blieb: die lief
-            // immer wieder in den teuren Pfad, obwohl laengst "fertig").
-            // Dateien, die einen frueheren Lauf zum Haengen brachten, bekommen
-            // weder Inhalt noch Titelbild - nur Metadaten (der teure, moeglich
-            // in einer Endlosschleife haengende Pfad wird komplett gemieden).
             boolean poisoned = skipContentCached.contains(f.getPath());
-            boolean wantContent = !poisoned && isSupported(ext) && f.length() <= MAX_CONTENT_BYTES
-                    && contentWanted(f.getPath());
+            // Fuer welche Dateien soll ueberhaupt Inhalt/Titel extrahiert werden
+            // (Phase 2)? Nur unterstuetzte Formate; Comics nur wenn gewuenscht;
+            // vergiftete Dateien nie (die brachten einen frueheren Lauf zum
+            // Haengen - fuer sie bleibt es beim reinen Namens-Eintrag).
+            boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
+            boolean wantExtract = !poisoned && isSupported(ext) && (!comic || searchComicsMetaCached);
+            boolean wantContent = wantExtract && size <= MAX_CONTENT_BYTES && contentWanted(f.getPath());
             SearchStore.KnownState known = store.known(f.getPath());
-            if (known.mtime == mtime && (!wantContent || known.contentOk)) {
-                // Unveraendert seit dem letzten Lauf, UND (Inhalt entweder gar
-                // nicht gewuenscht oder schon vorhanden) - nichts neu zu tun.
-                // Ohne die zweite Bedingung wuerde ein nachtraeglich fuer
-                // diesen Ordner eingeschaltetes "Inhalt durchsuchbar machen"
-                // nie greifen, solange sich keine einzige Datei mehr aendert
-                // (bei einer stabilen Buchsammlung: nie) - Mathias' Verdacht,
-                // dass mit dem Indizieren "irgendwas nicht stimmt".
-                if (!poisoned && contextApp != null && !Thumbnails.exists(contextApp, f.getPath())) {
-                    generateThumbSafely(contextApp, f, ext);
-                }
+            boolean unchanged = known.mtime == mtime && known.size == size;
+            if (unchanged) {
+                // Unveraendert. Metadaten stehen schon. Nur wenn noch Inhalt
+                // gewuenscht ist und fehlt -> fuer Phase 2 vormerken.
+                if (wantContent && !known.contentOk) pendingExtract.add(f.getPath());
                 scanned++;
                 return;
             }
-
+            // Neu oder geaendert -> schnelle Metadaten schreiben (loescht einen
+            // evtl. veralteten Volltext) und, falls unterstuetzt, fuer die
+            // Inhalts-/Titel-Erfassung in Phase 2 vormerken.
             long created = readCreated(f, mtime);
-
-            FileExtractors.Result r = new FileExtractors.Result();
-            // Bei einer vergifteten Datei den Extraktor GANZ auslassen (auch
-            // die Metadaten-Extraktion, denn schon die kann der Haenger gewesen
-            // sein) - es bleibt beim reinen Datei-Eintrag (Name/Typ/Groesse/
-            // Datum), der bleibt ueber die Namenssuche auffindbar.
-            if (!poisoned && isSupported(ext)) { // Metadaten sind billig, immer versuchen
-                boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
-                if (!comic || searchComicsMetaCached) {
-                    // Breadcrumb VOR der (teuren, evtl. haengenden) Extraktion -
-                    // nur nach logcat (nicht in die kleine Datei), damit bei
-                    // einem harten Prozess-Kill die zuletzt begonnene Datei
-                    // sichtbar bleibt (Tag "SucherDiag").
-                    android.util.Log.i("SucherDiag", "extrahiere" + (wantContent ? " Inhalt" : " Metadaten")
-                            + " [" + ext + ", " + f.length() + "B]: " + f.getPath());
-                    r = FileExtractors.extract(f, ext, wantContent);
-                    if (r.text != null && !r.text.isEmpty()) contentIndexed++;
-                }
-            }
-            store.upsert(f.getPath(), name, ext, f.length(), mtime, created,
-                    r.text, r.drm, r.title, r.author, r.series, r.seriesIndex);
-            if (!poisoned && contextApp != null) generateThumbSafely(contextApp, f, ext);
+            // Alten Volltext nur loeschen, wenn die Datei vorher welchen hatte
+            // (sonst teurer FTS-Komplettscan, siehe SearchStore.upsertMeta).
+            store.upsertMeta(f.getPath(), name, ext, size, mtime, created, known.contentOk);
+            if (wantExtract) pendingExtract.add(f.getPath());
             scanned++;
         } catch (Throwable t) {
             android.util.Log.w("EdgeTabSearch", "Datei uebersprungen: " + f.getPath(), t);
@@ -384,19 +383,83 @@ final class SearchIndexer {
         }
     }
 
-    // Von start() gesetzt - fuer die Cache-Ablage der Miniaturbilder
-    // (Thumbnails.java braucht einen Context fuers Cache-Verzeichnis).
-    private static Context contextApp;
-
-    /** Miniaturbild erzeugen, ohne dass ein Fehler dabei je den Indizierlauf
-     *  fuer die restlichen Dateien gefaehrdet - "kein Titelbild" ist immer
-     *  ein akzeptables Ergebnis, ein abgebrochener Lauf nicht. */
-    private static void generateThumbSafely(Context app, File f, String ext) {
-        try {
-            if ("pdf".equals(ext)) Thumbnails.generatePdf(app, f);
-            else Thumbnails.generate(app, f, ext);
-        } catch (Throwable ignored) {}
+    /** PHASE 2: fuer die in Phase 1 vorgemerkten Dateien Inhalt/Titel/Autor
+     *  erfassen. Laeuft NACH der schnellen Metadaten-Phase, sodass alle Dateien
+     *  (auch die in grossen Medien-Ordnern) bereits per Namenssuche gefunden
+     *  werden, egal wie lange diese teure Phase dauert. Kooperativer Stopp
+     *  zwischen den Dateien; der Watchdog sieht Fortschritt an scanned. */
+    private static void extractPass(Context app, SearchStore store) {
+        if (stopRequested || pendingExtract == null) return;
+        phase = 2;
+        DiagLog.log(app, "Phase 2 (Inhalt): " + pendingExtract.size() + " Datei(en)");
+        for (String path : pendingExtract) {
+            if (stopRequested) return;
+            try {
+                File f = new File(path);
+                if (!f.isFile()) continue;
+                if (skipContentCached.contains(path)) continue;
+                String ext = extOf(f.getName());
+                long size = f.length();
+                boolean wantContent = size <= MAX_CONTENT_BYTES && contentWanted(path);
+                currentPath = path;
+                currentDir = f.getParent() == null ? "" : f.getParent();
+                android.util.Log.i("SucherDiag", "extrahiere" + (wantContent ? " Inhalt" : " Metadaten")
+                        + " [" + ext + ", " + size + "B]: " + path);
+                FileExtractors.Result r = FileExtractors.extract(f, ext, wantContent);
+                if (r.text != null && !r.text.isEmpty()) contentIndexed++;
+                long mtime = f.lastModified();
+                long created = readCreated(f, mtime);
+                // Phase 1 hat für diese Datei bereits content_ok=0 gesetzt und
+                // einen evtl. alten Volltext entfernt -> hier NICHT erneut den
+                // teuren FTS-Löschscan ausführen.
+                store.upsert(path, f.getName(), ext, size, mtime, created,
+                        r.text, r.drm, r.title, r.author, r.series, r.seriesIndex, false);
+                scanned++;
+            } catch (Throwable t) {
+                android.util.Log.w("EdgeTabSearch", "Inhalt uebersprungen: " + path, t);
+                DiagLog.log(app, "Inhalt übersprungen (Fehler): »" + path + "« - " + t);
+            }
+        }
     }
+
+    // Wie viele Kandidaten je Lauf hoechstens auf ein fehlendes Titelbild
+    // geprueft werden, und wie viele je Lauf hoechstens NEU erzeugt werden -
+    // bewusst gedeckelt (Mathias' Wunsch "in Tranchen"), damit das Telefon nicht
+    // warm wird. Der Rest kommt in den folgenden Laeufen bzw. bei Bedarf beim
+    // Anzeigen dran.
+    private static final int THUMB_SCAN_CAP = 4000;
+    private static final int THUMB_BATCH = 150;
+
+    /** PHASE 3: fuer die zuletzt geaenderten titelbildfaehigen Dateien Vorschau-
+     *  bilder vorab erzeugen, in kleinen Tranchen (siehe THUMB_BATCH). Nur was
+     *  noch keins hat. Titelbilder entstehen sonst ohnehin bei Bedarf beim
+     *  Anzeigen - das hier ist nur ein sanftes Vorwaermen. */
+    private static void thumbPass(Context app, SearchStore store) {
+        if (stopRequested) return;
+        phase = 3;
+        try {
+            java.util.List<String[]> cand = store.thumbCandidates(THUMB_SCAN_CAP);
+            int made = 0, checked = 0;
+            for (String[] pe : cand) {
+                if (stopRequested || made >= THUMB_BATCH) break;
+                String path = pe[0], ext = pe[1];
+                if (skipContentCached.contains(path)) continue;
+                if (!Thumbnails.canHaveThumb(ext)) continue;
+                if (Thumbnails.exists(app, path)) continue;
+                File f = new File(path);
+                if (!f.isFile()) continue;
+                currentPath = path;
+                checked++;
+                if (Thumbnails.ensure(app, f, ext)) { made++; thumbsMade++; }
+            }
+            DiagLog.log(app, "Phase 3 (Titelbilder): " + made + " neu erzeugt (" + checked + " geprüft)");
+        } catch (Throwable t) {
+            android.util.Log.w("EdgeTabSearch", "Titelbild-Phase abgebrochen", t);
+        }
+    }
+
+    // Von start() gesetzt - fuer Kontext-abhaengige Aufrufe.
+    private static Context contextApp;
 
     /** Erstellungsdatum ("Geburt") ueber NIO, wo der Kernel/Dateisystem es
      *  liefert (ext4-btime-Unterstuetzung variiert) - sonst Ruecksturz auf

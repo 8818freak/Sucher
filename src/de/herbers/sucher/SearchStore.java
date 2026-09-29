@@ -121,13 +121,20 @@ public class SearchStore extends SQLiteOpenHelper {
         }
     }
 
-    /** Metadaten + (falls vorhanden) Inhalt einer Datei ablegen/aktualisieren. */
+    /** Metadaten + (falls vorhanden) Inhalt einer Datei ablegen/aktualisieren.
+     *  clearOldContent: nur dann die evtl. vorhandene Volltext-Zeile vorher
+     *  loeschen, wenn die Datei ueberhaupt schon Volltext hatte. Das ist teuer:
+     *  content_fts ist eine FTS4-Tabelle mit den kompletten Buchtexten, und ein
+     *  DELETE ... WHERE path=? MUSS dort alle Zeilen (Gigabytes) durchsuchen,
+     *  weil path kein durchsuchbarer Schluessel ist - fuer eine NEUE Datei (ohne
+     *  alten Volltext) wuerde das nur unnoetig ~10-15 s je Datei kosten. */
     public void upsert(String path, String name, String ext, long size, long mtime, long created,
-                        String content, boolean drm, String title, String author, String series, float seriesIndex) {
+                        String content, boolean drm, String title, String author, String series,
+                        float seriesIndex, boolean clearOldContent) {
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
-            db.delete("content_fts", "path=?", new String[]{path});
+            if (clearOldContent) db.delete("content_fts", "path=?", new String[]{path});
             ContentValues v = new ContentValues();
             v.put("path", path);
             v.put("name", name);
@@ -156,23 +163,70 @@ public class SearchStore extends SQLiteOpenHelper {
         }
     }
 
+    /** Schlanke Metadaten-Ablage OHNE Inhalt/Titel (Phase 1 der zweiphasigen
+     *  Indizierung): schreibt nur Name/Typ/Groesse/Datum, damit JEDE Datei
+     *  sofort per Namenssuche gefunden wird - auch bevor die (teure) Inhalts-
+     *  und Titel-Erfassung (Phase 2) an die Reihe kommt. content_ok=0, ein evtl.
+     *  vorhandener alter Volltext (geaenderte Datei) wird entfernt und in Phase 2
+     *  neu erfasst. Fuer UNVERAENDERTE Dateien wird diese Methode gar nicht erst
+     *  aufgerufen (siehe SearchIndexer), deren Inhalt/Titel bleibt also erhalten. */
+    public void upsertMeta(String path, String name, String ext, long size, long mtime, long created,
+                           boolean clearOldContent) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            // Nur wenn die Datei vorher Volltext hatte (siehe upsert()): der
+            // DELETE auf der FTS4-Tabelle ist sonst ein teurer Komplettscan.
+            if (clearOldContent) db.delete("content_fts", "path=?", new String[]{path});
+            ContentValues v = new ContentValues();
+            v.put("path", path);
+            v.put("name", name);
+            v.put("ext", ext);
+            v.put("size", size);
+            v.put("mtime", mtime);
+            v.put("created", created);
+            v.put("indexed_at", System.currentTimeMillis());
+            v.put("content_ok", 0);
+            db.insertWithOnConflict("files", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
     /** Bekannter Stand einer bereits indizierten Datei: Aenderungszeit
      *  (-1, falls unbekannt) und ob ihr Inhalt bereits mitindiziert wurde. */
     public static final class KnownState {
         public long mtime = -1;
+        public long size = -1;
         public boolean contentOk;
     }
 
     public KnownState known(String path) {
         KnownState s = new KnownState();
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT mtime, content_ok FROM files WHERE path=?", new String[]{path});
+                "SELECT mtime, content_ok, size FROM files WHERE path=?", new String[]{path});
         if (c.moveToFirst()) {
             s.mtime = c.getLong(0);
             s.contentOk = c.getInt(1) != 0;
+            s.size = c.getLong(2);
         }
         c.close();
         return s;
+    }
+
+    /** Kandidaten fuer die Titelbild-Tranche (Phase 3): zuletzt geaenderte
+     *  Dateien zuerst (die schaut man am ehesten an), je Aufruf gedeckelt.
+     *  Liefert Pfad + Endung; der Aufrufer filtert titelbildfaehige und erzeugt
+     *  fehlende Bilder. */
+    public List<String[]> thumbCandidates(int limit) {
+        List<String[]> out = new ArrayList<>();
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT path, ext FROM files ORDER BY mtime DESC LIMIT ?",
+                new String[]{String.valueOf(limit)});
+        while (c.moveToNext()) out.add(new String[]{c.getString(0), c.getString(1)});
+        c.close();
+        return out;
     }
 
     /** Alle Eintraege zu Pfaden entfernen, die beim letzten Durchlauf nicht

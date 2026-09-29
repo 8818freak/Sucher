@@ -103,10 +103,19 @@ public class MainActivity extends Activity {
     // rowThumbOrIcon) - ein einzelner Thread reicht, und je Pfad nur ein
     // Versuch pro Sitzung, damit wiederholte rebuild()s nicht dieselbe (evtl.
     // erfolglose) Erzeugung immer wieder anstossen.
+    // Mehrere Threads, damit die Vorschaubilder sichtbarer Treffer zügig
+    // erscheinen (ein einzelner Thread war bei Bildordnern zu langsam - es
+    // blieben lange nur die Datei-Symbole stehen).
     private static final java.util.concurrent.Executor THUMB_EXEC =
-            java.util.concurrent.Executors.newSingleThreadExecutor();
+            java.util.concurrent.Executors.newFixedThreadPool(3);
     private static final java.util.Set<String> THUMB_TRIED =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+
+    // Wie viele Datei-Zeilen je Kategorie aktuell gezeichnet werden (waechst per
+    // "Mehr anzeigen" in Schritten). Kein fester Deckel mehr - der Nutzer
+    // entscheidet, wie viele er sehen will (Mathias: Begrenzungen nerven).
+    private static final java.util.Map<String, Integer> FILE_SHOWN = new java.util.HashMap<>();
+    private static final int FILE_SHOW_STEP = 50;
 
     private static String fileCategory(String ext) {
         if (ext == null) return "files";
@@ -742,13 +751,14 @@ public class MainActivity extends Activity {
         LinearLayout results = advancedResults;
         int d = advancedD;
         results.removeAllViews();
+        FILE_SHOWN.clear(); // frische Suche -> Anzeige-Zähler zurücksetzen
         if (!hasStoragePermission()) { results.addView(storagePermissionHint(d)); return; }
         // "bis" schliesst den ganzen Tag ein, nicht nur 00:00 Uhr.
         long createdTo = advCreatedTo > 0 ? advCreatedTo + DateUtils.DAY_IN_MILLIS - 1 : 0;
         long modifiedTo = advModifiedTo > 0 ? advModifiedTo + DateUtils.DAY_IN_MILLIS - 1 : 0;
         List<SearchStore.FileHit> files = SearchStore.get(this).advancedSearch(
                 advName, advAuthor, advTitle, advSeries, advExts,
-                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, 100, scopePaths, scopeFolder);
+                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, -1, scopePaths, scopeFolder);
         if (files.isEmpty()) {
             TextView none = new TextView(this);
             none.setText("Keine Treffer.");
@@ -940,16 +950,99 @@ public class MainActivity extends Activity {
             if (list.isEmpty()) continue;
             if (lastOpenedPath != null) {
                 for (int i = 0; i < list.size(); i++) {
-                    if (list.get(i).path.equals(lastOpenedPath) && i >= PAGE) { EXPANDED.add(cat[0]); break; }
+                    if (list.get(i).path.equals(lastOpenedPath) && i + 1 > shown(cat[0])) {
+                        FILE_SHOWN.put(cat[0], i + 1); // so weit aufklappen, dass sie sichtbar ist
+                        break;
+                    }
                 }
             }
-            results.addView(card(cat[1], list.size(), d, fileRows(list, d, highlightHolder), cat[0]));
+            results.addView(fileCard(cat[1], list, d, highlightHolder, cat[0]));
             results.addView(narrowRow(list, d));
+        }
+    }
+
+    /** Datei-Ergebniskarte mit LAZY aufgebauten Zeilen: eingeklappt PAGE, per
+     *  "Mehr anzeigen" wächst die Zahl schrittweise (kein fester Deckel - der
+     *  Nutzer entscheidet). Es werden nur die tatsächlich gezeigten Zeilen
+     *  erzeugt, damit auch sehr viele Treffer flüssig bleiben. */
+    private View fileCard(String title, List<SearchStore.FileHit> hits, int d, View[] highlightHolder, String key) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#1E1E20"));
+        bg.setCornerRadius(12 * d);
+        bg.setStroke((int) (1 * d), Color.parseColor("#3A3A3C"));
+        box.setBackground(bg);
+        box.setPadding(0, 0, 0, 6 * d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = 10 * d;
+        box.setLayoutParams(lp);
+
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable headBg = new GradientDrawable();
+        headBg.setColor(Color.parseColor("#2E9BE6"));
+        headBg.setCornerRadii(new float[]{12*d,12*d,12*d,12*d,0,0,0,0});
+        head.setBackground(headBg);
+        head.setPadding(14 * d, 8 * d, 14 * d, 8 * d);
+        TextView t = new TextView(this);
+        t.setText(title + " (" + hits.size() + ")");
+        t.setTextColor(Color.WHITE);
+        t.setTextSize(13 * fs);
+        head.addView(t);
+        box.addView(head);
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        box.addView(body);
+        fillFileCardBody(body, hits, key, d, highlightHolder);
+        return box;
+    }
+
+    /** Aktuell gezeichnete Zeilenzahl je Datei-Kategorie (Standard PAGE). */
+    private int shown(String key) {
+        Integer n = FILE_SHOWN.get(key);
+        return n == null ? PAGE : n;
+    }
+
+    private void fillFileCardBody(LinearLayout body, List<SearchStore.FileHit> hits, String key,
+                                  int d, View[] highlightHolder) {
+        body.removeAllViews();
+        int shown = Math.min(shown(key), hits.size());
+        for (int i = 0; i < shown; i++) body.addView(fileRow(hits.get(i), d, highlightHolder));
+        int rest = hits.size() - shown;
+        if (rest > 0) {
+            TextView more = new TextView(this);
+            int step = Math.min(FILE_SHOW_STEP, rest);
+            more.setText("Mehr anzeigen (" + step + " von " + rest + " weiteren) ▼");
+            more.setTextColor(Color.parseColor("#2E9BE6"));
+            more.setTextSize(12 * fs);
+            more.setPadding(14 * d, 8 * d, 14 * d, 4 * d);
+            more.setOnClickListener(v -> {
+                FILE_SHOWN.put(key, shown + FILE_SHOW_STEP);
+                fillFileCardBody(body, hits, key, d, highlightHolder);
+            });
+            body.addView(more);
+        }
+        if (shown > PAGE) {
+            TextView less = new TextView(this);
+            less.setText("Weniger anzeigen ▲");
+            less.setTextColor(Color.parseColor("#2E9BE6"));
+            less.setTextSize(12 * fs);
+            less.setPadding(14 * d, 8 * d, 14 * d, 4 * d);
+            less.setOnClickListener(v -> {
+                FILE_SHOWN.put(key, PAGE);
+                fillFileCardBody(body, hits, key, d, highlightHolder);
+            });
+            body.addView(less);
         }
     }
 
     private void runSearch(String q, LinearLayout results, int d) {
         results.removeAllViews();
+        FILE_SHOWN.clear(); // frische Suche -> Anzeige-Zähler zurücksetzen
         if (q == null || q.trim().length() < 2) {
             TextView hint = new TextView(this);
             hint.setText("Mindestens 2 Zeichen eingeben.");
@@ -965,7 +1058,7 @@ public class MainActivity extends Activity {
         boolean anyFileCat = !(EXCLUDED_CATS.contains("files") && EXCLUDED_CATS.contains("images")
                 && EXCLUDED_CATS.contains("videos") && EXCLUDED_CATS.contains("music"));
         List<SearchStore.FileHit> files = (hasStoragePermission() && anyFileCat)
-                ? SearchStore.get(this).search(q, 60, scopePaths, scopeFolder) : new ArrayList<>();
+                ? SearchStore.get(this).search(q, -1, scopePaths, scopeFolder) : new ArrayList<>();
         List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(q);
         List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(q);
         List<SearchStore.NotifHit> notifs = new ArrayList<>();
@@ -1744,6 +1837,24 @@ public class MainActivity extends Activity {
         comicCb.setOnCheckedChangeListener((v, on) -> Settings.setSearchComicsMeta(this, on));
         root.addView(comicCb);
 
+        section(root, "Vorschaubilder", d);
+        CheckBox thumbCb = new CheckBox(this);
+        thumbCb.setText("  Dauerhaft speichern (überleben „Cache leeren“ / SD Maid)");
+        thumbCb.setTextColor(Color.WHITE);
+        thumbCb.setTextSize(13 * fs);
+        thumbCb.setChecked(Settings.thumbsPersistent(this));
+        thumbCb.setOnCheckedChangeListener((v, on) -> Settings.setThumbsPersistent(this, on));
+        root.addView(thumbCb);
+        TextView thumbHint = new TextView(this);
+        thumbHint.setText("An: Vorschaubilder liegen im app-internen Speicher und bleiben erhalten "
+                + "(zählen als App-Daten). Aus: sie liegen im Cache und dürfen bei Speichernot "
+                + "geräumt werden (werden dann bei Bedarf neu erzeugt). Nicht in der Datenbank – "
+                + "die Sicherung bleibt schlank.");
+        thumbHint.setTextColor(Color.parseColor("#8899AA"));
+        thumbHint.setTextSize(11.5f * fs);
+        thumbHint.setPadding(0, 0, 0, 4 * d);
+        root.addView(thumbHint);
+
         section(root, "Index", d);
         boolean running = SearchIndexer.isRunning();
         SearchStore idxStore = SearchStore.get(this);
@@ -1776,9 +1887,13 @@ public class MainActivity extends Activity {
         root.addView(contentStatus);
 
         if (running) {
+            String ph = SearchIndexer.phase == 1 ? "Phase 1/3: Dateien erfassen (Namen)"
+                    : SearchIndexer.phase == 2 ? "Phase 2/3: Inhalt/Titel erfassen"
+                    : SearchIndexer.phase == 3 ? "Phase 3/3: Titelbilder" : "Läuft";
             TextView live = new TextView(this);
-            live.setText("Läuft gerade: " + SearchIndexer.scanned + " geprüft, "
-                    + SearchIndexer.contentIndexed + " davon mit neuem Volltext in diesem Durchlauf");
+            live.setText(ph + " – " + SearchIndexer.scanned + " geprüft, "
+                    + SearchIndexer.contentIndexed + " mit neuem Volltext, "
+                    + SearchIndexer.thumbsMade + " Titelbilder");
             live.setTextColor(Color.parseColor("#2E9BE6"));
             live.setTextSize(12 * fs);
             live.setPadding(0, 0, 0, 2 * d);

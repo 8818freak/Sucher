@@ -17,13 +17,15 @@ import java.util.zip.ZipFile;
  * Mathias' ~22000 Buechern den zweistelligen-GB-Index ausloesen wuerden -
  * darum immer versucht, wo das Format es hergibt.
  *
- * Ablage als JPEG-Dateien im App-Cache (nicht in der SQLite-Datenbank selbst -
- * Cache-Verzeichnisse duerfen vom System bei Speichernot geleert werden, genau
- * das richtige Verhalten fuer "nice to have"-Vorschaubilder, die sich beim
- * naechsten Indizierlauf einfach neu erzeugen). Es gibt bewusst KEINE eigene
- * Datenbank-Spalte dafuer - MainActivity prueft beim Anzeigen einfach, ob die
- * Cache-Datei existiert (schnell genug fuer eine Bildschirmseite Treffer,
- * unnoetig fuer 22000 Zeilen auf einmal).
+ * Ablage als JPEG-Dateien im app-internen DATEIEN-Ordner (getFilesDir/thumbs),
+ * NICHT in der SQLite-Datenbank (die bliebe sonst um hunderte MB groesser und
+ * die Sicherung ebenso) und NICHT im Cache (den raeumen System und Werkzeuge
+ * wie SD Maid weg). So ueberleben die Vorschaubilder ein "Cache leeren" und
+ * werden nicht staendig neu erzeugt; entfernt werden sie nur mit "Daten
+ * loeschen"/Deinstallieren. Es gibt bewusst KEINE eigene Datenbank-Spalte
+ * dafuer - MainActivity prueft beim Anzeigen einfach, ob die Bilddatei existiert
+ * (schnell genug fuer eine Bildschirmseite Treffer, unnoetig fuer zehntausende
+ * Zeilen auf einmal).
  */
 final class Thumbnails {
 
@@ -36,7 +38,18 @@ final class Thumbnails {
     private static final long MAX_SOURCE_BYTES = 80L * 1024 * 1024;
 
     private static File cacheDir(Context ctx) {
-        File dir = new File(ctx.getCacheDir(), "thumbs");
+        // Ablageort per Einstellung waehlbar (Settings.thumbsPersistent):
+        //  - AN (Standard): app-interner DATEIEN-Ordner (getFilesDir) -> die
+        //    Vorschaubilder ueberleben ein „Cache leeren" (System UND Werkzeuge
+        //    wie SD Maid), werden nur mit „Daten loeschen"/Deinstallieren
+        //    entfernt. Sie liegen weiterhin NICHT in der Datenbank (die bleibt
+        //    schlank, die Sicherung klein).
+        //  - AUS: Cache-Ordner (getCacheDir) -> darf vom System/Werkzeugen bei
+        //    Speichernot geraeumt werden, spart dauerhaften Platz.
+        // Nach dem Umschalten am anderen Ort fehlende Bilder werden bei Bedarf
+        // einfach neu erzeugt.
+        File base = Settings.thumbsPersistent(ctx) ? ctx.getFilesDir() : ctx.getCacheDir();
+        File dir = new File(base, "thumbs");
         if (!dir.exists()) dir.mkdirs();
         return dir;
     }

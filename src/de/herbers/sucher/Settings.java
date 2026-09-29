@@ -24,6 +24,7 @@ public final class Settings {
     private static final String K_FONT_SCALE = "font_scale"; // Prozent, 100 = normal
     private static final String K_SEARCH_HISTORY = "search_history"; // neueste zuerst, ""-getrennt
     private static final String K_SKIP_CONTENT = "skip_content_paths"; // Dateien, die den Indizierer haengen liessen
+    private static final String K_THUMBS_PERSIST = "thumbs_persistent"; // Vorschaubilder dauerhaft (Dateien) statt Cache
     private static final int MAX_HISTORY = 15;
 
     private Settings() {}
@@ -110,6 +111,13 @@ public final class Settings {
     // wenn Sucher geschlossen ist). ----
     public static boolean autoReindex(Context c) { return p(c).getBoolean(K_AUTO_REINDEX, true); }
     public static void setAutoReindex(Context c, boolean on) { p(c).edit().putBoolean(K_AUTO_REINDEX, on).apply(); }
+
+    // ---- Vorschaubilder dauerhaft speichern? AN = app-interner Dateien-Ordner
+    // (ueberlebt "Cache leeren" / SD Maid, zaehlt aber als App-Daten). AUS =
+    // Cache-Ordner (darf vom System/Werkzeugen bei Speichernot geraeumt werden,
+    // spart dauerhaften Platz). Standard AN (Vorschaubilder bleiben erhalten). --
+    public static boolean thumbsPersistent(Context c) { return p(c).getBoolean(K_THUMBS_PERSIST, true); }
+    public static void setThumbsPersistent(Context c, boolean on) { p(c).edit().putBoolean(K_THUMBS_PERSIST, on).apply(); }
 
     // ---- Schriftgroesse - wie EdgeTab, 100 = normal, Bereich 80..150 (%) ----
     public static float fontScale(Context c) { return p(c).getInt(K_FONT_SCALE, 100) / 100f; }
