@@ -4,6 +4,10 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.49
+- Verbessert: Erfolglose ausgehende Anrufe (Dauer 0 – niemanden erreicht) werden
+  in der Anrufe-Trefferliste jetzt als „ausgehend · nicht erreicht" gekennzeichnet.
+
 ## 0.48
 - Neu: Sucher kann von anderen Apps mit einem Suchbegriff geöffnet werden (Intent
   mit „query“ bzw. ACTION_SEARCH) – z. B. über EdgeTabs „In Sucher suchen“. Der

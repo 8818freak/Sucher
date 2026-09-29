@@ -1663,7 +1663,7 @@ public class MainActivity extends Activity {
 
     // ---------- Anrufe ----------
 
-    private static final class CallHit { String number, name; int type; long date; }
+    private static final class CallHit { String number, name; int type; long date; boolean failed; }
 
     private List<CallHit> queryCalls(String q) {
         List<CallHit> out = new ArrayList<>();
@@ -1673,7 +1673,8 @@ public class MainActivity extends Activity {
         String like = "%" + q + "%";
         try (Cursor c = getContentResolver().query(android.provider.CallLog.Calls.CONTENT_URI,
                 new String[]{android.provider.CallLog.Calls.NUMBER, android.provider.CallLog.Calls.CACHED_NAME,
-                        android.provider.CallLog.Calls.TYPE, android.provider.CallLog.Calls.DATE},
+                        android.provider.CallLog.Calls.TYPE, android.provider.CallLog.Calls.DATE,
+                        android.provider.CallLog.Calls.DURATION},
                 sel, new String[]{like, like}, android.provider.CallLog.Calls.DATE + " DESC")) {
             if (c != null) {
                 while (c.moveToNext() && out.size() < 20) {
@@ -1682,6 +1683,8 @@ public class MainActivity extends Activity {
                     h.name = c.getString(1);
                     h.type = c.getInt(2);
                     h.date = c.isNull(3) ? 0 : c.getLong(3);
+                    long dur = c.isNull(4) ? 0 : c.getLong(4);
+                    h.failed = h.type == android.provider.CallLog.Calls.OUTGOING_TYPE && dur == 0;
                     out.add(h);
                 }
             }
@@ -1704,7 +1707,7 @@ public class MainActivity extends Activity {
             String dir;
             switch (h.type) {
                 case android.provider.CallLog.Calls.INCOMING_TYPE: dir = "eingehend"; break;
-                case android.provider.CallLog.Calls.OUTGOING_TYPE: dir = "ausgehend"; break;
+                case android.provider.CallLog.Calls.OUTGOING_TYPE: dir = h.failed ? "ausgehend · nicht erreicht" : "ausgehend"; break;
                 case android.provider.CallLog.Calls.MISSED_TYPE: dir = "verpasst"; break;
                 default: dir = "";
             }
