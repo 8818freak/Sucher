@@ -2170,8 +2170,8 @@ public class MainActivity extends Activity {
         backupRow.addView(importBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         root.addView(backupRow);
 
-        buildDiagnosticsSection(root, d);
         buildAboutSection(root, d);
+        buildDiagnosticsSection(root, d); // Log-Anzeige bewusst ganz unten (Mathias' Wunsch)
     }
 
     // ---------- Diagnose (problematische Dateien + Protokoll) ----------
@@ -2213,31 +2213,44 @@ public class MainActivity extends Activity {
         section(root, "Diagnose-Protokoll", d);
         TextView diagHint = new TextView(this);
         diagHint.setText("Was der Indizierer zuletzt getan hat und an welchen Dateien er sich "
-                + "verschluckt hat – hilft bei der Fehlersuche.");
+                + "verschluckt hat – hilft bei der Fehlersuche. Neueste Einträge oben.");
         diagHint.setTextColor(Color.parseColor("#8899AA"));
         diagHint.setTextSize(12 * fs);
         diagHint.setPadding(0, 0, 0, 6 * d);
         root.addView(diagHint);
-        String diag = DiagLog.read(this);
-        if (diag == null || diag.isEmpty()) {
-            TextView none = new TextView(this);
-            none.setText("(noch leer)");
-            none.setTextColor(Color.GRAY);
-            none.setTextSize(12 * fs);
-            root.addView(none);
-        } else {
-            TextView log = new TextView(this);
-            log.setText(diag);
-            log.setTextColor(Color.parseColor("#CCCCCC"));
-            log.setTextSize(11 * fs);
-            log.setTypeface(android.graphics.Typeface.MONOSPACE);
-            log.setTextIsSelectable(true);
-            log.setPadding(0, 6 * d, 0, 6 * d);
-            root.addView(log);
+
+        // Schalter + Knoepfe stehen bewusst ueber dem Protokoll (Mathias' Wunsch).
+        CheckBox showLog = new CheckBox(this);
+        showLog.setText("  Protokoll anzeigen");
+        showLog.setTextColor(Color.WHITE);
+        showLog.setTextSize(13 * fs);
+        showLog.setChecked(Settings.showDiagLog(this));
+        showLog.setOnCheckedChangeListener((v, on) -> { Settings.setShowDiagLog(this, on); rebuild(); });
+        root.addView(showLog);
+
+        String diag = DiagLog.readNewestFirst(this);
+        boolean show = Settings.showDiagLog(this);
+        if (show) {
             Button clear = new Button(this);
             clear.setText("Protokoll löschen");
             clear.setOnClickListener(v -> { DiagLog.clear(this); rebuild(); });
             root.addView(clear);
+            if (diag == null || diag.isEmpty()) {
+                TextView none = new TextView(this);
+                none.setText("(noch leer)");
+                none.setTextColor(Color.GRAY);
+                none.setTextSize(12 * fs);
+                root.addView(none);
+            } else {
+                TextView log = new TextView(this);
+                log.setText(diag);
+                log.setTextColor(Color.parseColor("#CCCCCC"));
+                log.setTextSize(11 * fs);
+                log.setTypeface(android.graphics.Typeface.MONOSPACE);
+                log.setTextIsSelectable(true);
+                log.setPadding(0, 6 * d, 0, 6 * d);
+                root.addView(log);
+            }
         }
     }
 

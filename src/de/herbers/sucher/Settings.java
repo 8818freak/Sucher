@@ -26,6 +26,7 @@ public final class Settings {
     private static final String K_SKIP_CONTENT = "skip_content_paths"; // Dateien, die den Indizierer haengen liessen
     private static final String K_THUMBS_PERSIST = "thumbs_persistent"; // Vorschaubilder dauerhaft (Dateien) statt Cache
     private static final String K_INDEX_ARCHIVES = "index_archives"; // Inhalte von ZIP/7z/TAR-Archiven mitindizieren (teuer)
+    private static final String K_SHOW_DIAGLOG = "show_diaglog"; // Diagnose-Protokoll in den Einstellungen anzeigen
     private static final int MAX_HISTORY = 15;
 
     private Settings() {}
@@ -96,6 +97,11 @@ public final class Settings {
     // dem Namen nach (kein freier, GPL-kompatibler Entpacker). ----
     public static boolean indexArchives(Context c) { return p(c).getBoolean(K_INDEX_ARCHIVES, false); }
     public static void setIndexArchives(Context c, boolean on) { p(c).edit().putBoolean(K_INDEX_ARCHIVES, on).apply(); }
+
+    // ---- Diagnose-Protokoll in den Einstellungen anzeigen? Standard AN. Der
+    // Schalter steht ueber dem (ganz unten angezeigten) Protokoll. ----
+    public static boolean showDiagLog(Context c) { return p(c).getBoolean(K_SHOW_DIAGLOG, true); }
+    public static void setShowDiagLog(Context c, boolean on) { p(c).edit().putBoolean(K_SHOW_DIAGLOG, on).apply(); }
     public static long searchLastRun(Context c) { return p(c).getLong(K_SEARCH_LAST_RUN, 0); }
     public static void setSearchLastRun(Context c, long t) { p(c).edit().putLong(K_SEARCH_LAST_RUN, t).apply(); }
 

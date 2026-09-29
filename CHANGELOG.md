@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.44
+- Verbessert: Das Diagnose-Protokoll steht jetzt ganz unten in den
+  Einstellungen, zeigt die neuesten Einträge zuerst, und alle Schaltflächen
+  (Anzeigen-Schalter, „Protokoll löschen“) stehen darüber. Neuer Schalter
+  „Protokoll anzeigen“ blendet das Protokoll bei Bedarf ganz aus.
+
 ## 0.43
 - Neu: OpenOffice-/LibreOffice-Dokumente (ODT/ODS/ODP) werden jetzt gelesen –
   Titel/Autor und der Volltext, genau wie bei den Word-/Excel-Formaten.
