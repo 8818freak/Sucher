@@ -4,6 +4,25 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.42
+- Neu: OpenOffice-/LibreOffice-Dokumente (ODT/ODS/ODP) werden jetzt gelesen –
+  Titel/Autor und der Volltext, genau wie bei den Word-/Excel-Formaten.
+- Neu: Archive durchsuchbar (neuer Schalter in den Einstellungen, Standard AUS,
+  weil teuer). Ist er an, umfasst der Volltext eines Archivs auch die Texte der
+  Dokumente darin – so findest du ein Archiv über seinen Inhalt. Unterstützt:
+  ZIP, 7z, TAR (auch .gz/.bz2/.xz) und einzeln komprimierte Dateien (z. B.
+  bericht.pdf.gz). RAR nur im älteren RAR4-Format (moderne RAR5-Archive lassen
+  sich mit freien Bibliotheken nicht entpacken). Nur in Ordnern mit „Inhalt
+  durchsuchbar“; verschachtelte Archive werden nicht rekursiv ausgepackt.
+- Verbessert: Die Endungs-Vorschläge der erweiterten Suche kennen jetzt auch
+  Musikformate (ogg, opus, wav, aac, wma …), Videoformate und die Archivtypen;
+  neue Kategorie „Archive“.
+
+## 0.41
+
+## 0.41
+- (zusammengefasst in 0.42 veröffentlicht)
+
 ## 0.40
 - Neu: In der MOBI-Vorschau wird jetzt das Titelbild (Cover) ganz am Anfang
   angezeigt, falls das Buch eines enthält – vor dem Text.

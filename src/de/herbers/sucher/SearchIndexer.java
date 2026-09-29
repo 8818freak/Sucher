@@ -75,9 +75,13 @@ final class SearchIndexer {
      *  immer gespeichert) - verhindert dass ein Mammut-Archiv/-Video die
      *  Indizierung tagelang blockiert. */
     private static final long MAX_CONTENT_BYTES = 60L * 1024 * 1024;
+    // Archive duerfen groesser sein (der Inhalt wird ohnehin auf MAX_CHARS
+    // gedeckelt); ein sehr grosses Archiv aufzumachen kostet aber Zeit.
+    private static final long MAX_ARCHIVE_BYTES = 300L * 1024 * 1024;
 
     // Von start() einmal pro Lauf gesetzt.
     private static boolean searchComicsMetaCached = true;
+    private static boolean indexArchivesCached = false;
     private static List<String> contentRootsCached = java.util.Collections.emptyList();
     // Dateien, die einen frueheren Lauf zum Haengen brachten (siehe Watchdog
     // unten) - fuer die wird kein Inhalt/Titelbild mehr geholt, nur Metadaten.
@@ -102,6 +106,7 @@ final class SearchIndexer {
         Context app = ctx.getApplicationContext();
         contextApp = app;
         searchComicsMetaCached = Settings.searchComicsMeta(app);
+        indexArchivesCached = Settings.indexArchives(app);
         skipContentCached = Settings.skipContentPaths(app);
         Handler main = new Handler(Looper.getMainLooper());
         Thread worker = new Thread(() -> {
@@ -397,7 +402,9 @@ final class SearchIndexer {
             // Haengen - fuer sie bleibt es beim reinen Namens-Eintrag).
             boolean comic = "cbz".equals(ext) || "cbr".equals(ext);
             boolean wantExtract = !poisoned && isSupported(ext) && (!comic || searchComicsMetaCached);
-            boolean wantContent = wantExtract && size <= MAX_CONTENT_BYTES && contentWanted(f.getPath());
+            boolean wantContent = wantExtract
+                    && size <= (isArchive(ext) ? MAX_ARCHIVE_BYTES : MAX_CONTENT_BYTES)
+                    && contentWanted(f.getPath());
             SearchStore.KnownState known = store.known(f.getPath());
             boolean unchanged = known.mtime == mtime && known.size == size;
             if (unchanged) {
@@ -442,7 +449,10 @@ final class SearchIndexer {
                 if (skipContentCached.contains(path)) continue;
                 String ext = extOf(f.getName());
                 long size = f.length();
-                boolean wantContent = size <= MAX_CONTENT_BYTES && contentWanted(path);
+                boolean archive = isArchive(ext);
+                boolean wantContent = (!archive || indexArchivesCached)
+                        && size <= (archive ? MAX_ARCHIVE_BYTES : MAX_CONTENT_BYTES)
+                        && contentWanted(path);
                 currentPath = path;
                 currentDir = f.getParent() == null ? "" : f.getParent();
                 android.util.Log.i("SucherDiag", "extrahiere" + (wantContent ? " Inhalt" : " Metadaten")
@@ -527,12 +537,21 @@ final class SearchIndexer {
     static final String[] SUPPORTED_EXTS = {
             "txt", "md", "markdown", "csv", "log", "json", "xml", "srt", "ini", "yaml", "yml",
             "docx", "xlsx", "pptx", "doc", "xls", "ppt", "epub", "fb2",
+            "odt", "ods", "odp", "odg", "odf", "ott", "ots", "otp",
             "mobi", "azw", "azw3", "prc", "pdf", "cbz", "cbr"
     };
+    // Archiv-Formate, deren Inhalt (die Dokumente darin) NUR mitindiziert wird,
+    // wenn der teure Schalter "Archive durchsuchen" an ist (Settings.indexArchives).
+    // RAR ist bewusst nicht dabei: ohne freien Entpacker bleibt es beim Namen.
+    static final java.util.Set<String> ARCHIVE_EXT_SET = new java.util.HashSet<>(
+            java.util.Arrays.asList("zip", "7z", "rar", "tar",
+                    "tgz", "tbz", "tbz2", "txz", "gz", "bz2", "xz"));
+    private static boolean isArchive(String ext) { return ARCHIVE_EXT_SET.contains(ext); }
     private static final java.util.Set<String> SUPPORTED_EXT_SET =
             new java.util.HashSet<>(java.util.Arrays.asList(SUPPORTED_EXTS));
 
     private static boolean isSupported(String ext) {
+        if (isArchive(ext)) return indexArchivesCached;
         return SUPPORTED_EXT_SET.contains(ext);
     }
 }

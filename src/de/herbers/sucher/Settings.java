@@ -25,6 +25,7 @@ public final class Settings {
     private static final String K_SEARCH_HISTORY = "search_history"; // neueste zuerst, ""-getrennt
     private static final String K_SKIP_CONTENT = "skip_content_paths"; // Dateien, die den Indizierer haengen liessen
     private static final String K_THUMBS_PERSIST = "thumbs_persistent"; // Vorschaubilder dauerhaft (Dateien) statt Cache
+    private static final String K_INDEX_ARCHIVES = "index_archives"; // Inhalte von ZIP/7z/TAR-Archiven mitindizieren (teuer)
     private static final int MAX_HISTORY = 15;
 
     private Settings() {}
@@ -86,6 +87,14 @@ public final class Settings {
 
     public static boolean searchComicsMeta(Context c) { return p(c).getBoolean(K_SEARCH_COMICS, true); }
     public static void setSearchComicsMeta(Context c, boolean on) { p(c).edit().putBoolean(K_SEARCH_COMICS, on).apply(); }
+
+    // ---- Inhalte von Archiven (ZIP/7z/TAR/TAR.GZ) mitindizieren? Standard AUS,
+    // weil teuer: jedes enthaltene Dokument muss entpackt und einzeln extrahiert
+    // werden. AN = der Volltext eines Archivs umfasst auch die Texte der Dateien
+    // darin (so ist das Archiv ueber seinen Inhalt auffindbar). Unterstuetzt:
+    // ZIP/7z/RAR/TAR (auch .gz/.bz2/.xz) und einzeln komprimierte Dateien. ----
+    public static boolean indexArchives(Context c) { return p(c).getBoolean(K_INDEX_ARCHIVES, false); }
+    public static void setIndexArchives(Context c, boolean on) { p(c).edit().putBoolean(K_INDEX_ARCHIVES, on).apply(); }
     public static long searchLastRun(Context c) { return p(c).getLong(K_SEARCH_LAST_RUN, 0); }
     public static void setSearchLastRun(Context c, long t) { p(c).edit().putLong(K_SEARCH_LAST_RUN, t).apply(); }
 

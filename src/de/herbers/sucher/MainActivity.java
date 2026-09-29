@@ -788,14 +788,15 @@ public class MainActivity extends Activity {
     private static final java.util.LinkedHashMap<String, String[][]> EXT_CATS = new java.util.LinkedHashMap<>();
     static {
         EXT_CATS.put("E-Books", new String[][]{{"azw","Kindle-Buch (AZW)"},{"azw3","Kindle-Buch (AZW3)"},{"epub","E-Book (EPUB)"},{"fb2","E-Book (FictionBook)"},{"mobi","Kindle-Buch (MOBI)"}});
-        EXT_CATS.put("Dokumente", new String[][]{{"doc","Word-Dokument (älter)"},{"docx","Word-Dokument"},{"md","Markdown-Text"},{"pdf","PDF-Dokument"},{"rtf","Rich-Text-Dokument"},{"txt","Textdokument"}});
-        EXT_CATS.put("Tabellen", new String[][]{{"csv","Tabelle (CSV)"},{"xls","Excel-Tabelle (älter)"},{"xlsx","Excel-Tabelle"}});
-        EXT_CATS.put("Präsentationen", new String[][]{{"ppt","PowerPoint (älter)"},{"pptx","PowerPoint-Präsentation"}});
+        EXT_CATS.put("Dokumente", new String[][]{{"doc","Word-Dokument (älter)"},{"docx","Word-Dokument"},{"md","Markdown-Text"},{"odt","LibreOffice-Text (ODT)"},{"pdf","PDF-Dokument"},{"rtf","Rich-Text-Dokument"},{"txt","Textdokument"}});
+        EXT_CATS.put("Tabellen", new String[][]{{"csv","Tabelle (CSV)"},{"ods","LibreOffice-Tabelle (ODS)"},{"xls","Excel-Tabelle (älter)"},{"xlsx","Excel-Tabelle"}});
+        EXT_CATS.put("Präsentationen", new String[][]{{"odp","LibreOffice-Präsentation (ODP)"},{"ppt","PowerPoint (älter)"},{"pptx","PowerPoint-Präsentation"}});
         EXT_CATS.put("Comics", new String[][]{{"cbr","Comic-Archiv (CBR/RAR)"},{"cbz","Comic-Archiv (CBZ/ZIP)"}});
         EXT_CATS.put("Bilder", new String[][]{{"bmp","Bild (BMP)"},{"gif","Bild (GIF)"},{"jpg","Bild (JPEG)"},{"png","Bild (PNG)"},{"webp","Bild (WebP)"}});
-        EXT_CATS.put("Audio", new String[][]{{"flac","Audio (FLAC)"},{"m4a","Audio (M4A)"},{"mp3","Audio (MP3)"}});
-        EXT_CATS.put("Video", new String[][]{{"mkv","Video (MKV)"},{"mp4","Video (MP4)"}});
-        EXT_CATS.put("Web & Daten", new String[][]{{"html","Webseite (HTML)"},{"json","JSON-Datei"},{"xml","XML-Datei"},{"zip","ZIP-Archiv"}});
+        EXT_CATS.put("Audio", new String[][]{{"aac","Audio (AAC)"},{"flac","Audio (FLAC)"},{"m4a","Audio (M4A)"},{"mp3","Audio (MP3)"},{"ogg","Audio (OGG Vorbis)"},{"opus","Audio (Opus)"},{"wav","Audio (WAV)"},{"wma","Audio (WMA)"}});
+        EXT_CATS.put("Video", new String[][]{{"avi","Video (AVI)"},{"mkv","Video (MKV)"},{"mov","Video (QuickTime)"},{"mp4","Video (MP4)"},{"webm","Video (WebM)"}});
+        EXT_CATS.put("Archive", new String[][]{{"7z","Archiv (7-Zip)"},{"bz2","Bzip2-Datei / TAR.BZ2"},{"gz","Gzip-Datei / TAR.GZ"},{"rar","Archiv (RAR, nur RAR4)"},{"tar","Archiv (TAR)"},{"tgz","Archiv (TAR.GZ)"},{"xz","XZ-Datei / TAR.XZ"},{"zip","Archiv (ZIP)"}});
+        EXT_CATS.put("Web & Daten", new String[][]{{"html","Webseite (HTML)"},{"json","JSON-Datei"},{"xml","XML-Datei"}});
     }
 
     private interface TextSink { void set(String s); }
@@ -1983,6 +1984,28 @@ public class MainActivity extends Activity {
         comicCb.setChecked(Settings.searchComicsMeta(this));
         comicCb.setOnCheckedChangeListener((v, on) -> Settings.setSearchComicsMeta(this, on));
         root.addView(comicCb);
+
+        section(root, "Archive durchsuchen (ZIP/7z/TAR)", d);
+        CheckBox arcCb = new CheckBox(this);
+        arcCb.setText("  Dokumente IN Archiven mitindizieren (teuer)");
+        arcCb.setTextColor(Color.WHITE);
+        arcCb.setTextSize(13 * fs);
+        arcCb.setChecked(Settings.indexArchives(this));
+        arcCb.setOnCheckedChangeListener((v, on) -> Settings.setIndexArchives(this, on));
+        root.addView(arcCb);
+        TextView arcHint = new TextView(this);
+        arcHint.setText("An: Der Volltext eines Archivs umfasst auch die Texte der Dokumente darin "
+                + "(PDF, Office, E-Books …) – so findest du ein Archiv über seinen Inhalt. "
+                + "Unterstützt: ZIP, 7z, TAR (auch .gz/.bz2/.xz) und einzeln komprimierte "
+                + "Dateien (z. B. bericht.pdf.gz). RAR nur im älteren RAR4-Format – moderne "
+                + "RAR5-Archive lassen sich mit freien Bibliotheken nicht entpacken. "
+                + "Kostet beim Indizieren spürbar mehr Zeit, weil "
+                + "jedes enthaltene Dokument entpackt und einzeln ausgelesen wird. Nur in Ordnern "
+                + "mit „Inhalt durchsuchbar“.");
+        arcHint.setTextColor(Color.parseColor("#8899AA"));
+        arcHint.setTextSize(11.5f * fs);
+        arcHint.setPadding(0, 0, 0, 4 * d);
+        root.addView(arcHint);
 
         section(root, "Vorschaubilder", d);
         CheckBox thumbCb = new CheckBox(this);
