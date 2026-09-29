@@ -1,5 +1,7 @@
 package de.herbers.sucher;
 
+import de.herbers.docextract.*;
+
 import de.herbers.common.DiagLog;
 import de.herbers.common.Diagnostics;
 

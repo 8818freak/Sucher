@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.35
+- Intern: Die Format-Extraktoren (PDF/EPUB/MOBI/AZW3/CBZ/altes Office → Text,
+  Titel/Autor/Serie, Titelbilder) kommen jetzt aus der gemeinsamen Bibliothek
+  herbers-android-docextract (Git-Submodul, de.herbers.docextract) statt aus
+  eigenen Kopien – eine gepflegte Quelle, andere können sie ebenfalls nutzen.
+  Der „Vorschaubilder dauerhaft speichern"-Schalter bleibt unverändert (der
+  Ablageort wird der Bibliothek jetzt gesetzt). Keine sichtbare Änderung.
+
 ## 0.34
 - Intern: Das Diagnose-Protokoll und die neue Stapel-Erfassung bei Hängern
   kommen jetzt aus der gemeinsamen Bibliothek herbers-android-common

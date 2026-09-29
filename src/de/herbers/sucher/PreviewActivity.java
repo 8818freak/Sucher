@@ -1,5 +1,7 @@
 package de.herbers.sucher;
 
+import de.herbers.docextract.*;
+
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;

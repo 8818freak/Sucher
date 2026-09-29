@@ -1,5 +1,7 @@
 package de.herbers.sucher;
 
+import de.herbers.docextract.*;
+
 import de.herbers.common.DiagLog;
 
 import android.app.Activity;
@@ -1845,7 +1847,11 @@ public class MainActivity extends Activity {
         thumbCb.setTextColor(Color.WHITE);
         thumbCb.setTextSize(13 * fs);
         thumbCb.setChecked(Settings.thumbsPersistent(this));
-        thumbCb.setOnCheckedChangeListener((v, on) -> Settings.setThumbsPersistent(this, on));
+        thumbCb.setOnCheckedChangeListener((v, on) -> {
+            Settings.setThumbsPersistent(this, on);
+            // Ablageort der Vorschaubilder (docextract.Thumbnails) sofort umsetzen.
+            SucherApp.applyThumbStorage(this);
+        });
         root.addView(thumbCb);
         TextView thumbHint = new TextView(this);
         thumbHint.setText("An: Vorschaubilder liegen im app-internen Speicher und bleiben erhalten "

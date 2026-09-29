@@ -74,8 +74,12 @@ rm -rf build && mkdir -p build/gen build/obj
 "$BT/aapt2" link -o build/base.apk -I "$AJAR" --manifest AndroidManifest.xml \
   --java build/gen -R build/res.zip -A assets --auto-add-overlay \
   --min-sdk-version 29 --target-sdk-version 34
+# Gemeinsame Klassen liegen in den Git-Submodulen common/ (Diagnose, Einstellungs-
+# Sicherung, Benachrichtigungs-Kern u. a.) und docextract/ (Format-Extraktoren) -
+# vor dem Bauen einmal `git submodule update --init` ausfuehren; beide src/ werden
+# mitkompiliert.
 javac --release 11 -d build/obj -classpath "$AJAR:$(echo libs/*.jar | tr ' ' ':')" \
-  $(find src build/gen -name '*.java')
+  $(find src build/gen common/src docextract/src -name '*.java' 2>/dev/null)
 # module-info.class (JPMS) and META-INF/versions/ (multi-release jar classes,
 # e.g. log4j-api ships a Java 9 variant of Base64Util) both confuse d8 if left
 # in - the former isn't a real class, the latter causes "defined multiple
