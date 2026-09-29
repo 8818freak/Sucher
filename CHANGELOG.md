@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.50
+- Verbessert: Anruf-Farben – grün = erfolgreich, rot = verpasst, blau =
+  vergeblich (abgehend, niemanden erreicht).
+- Verbessert: SMS werden in der Trefferliste in voller Länge angezeigt (durchsucht
+  wurden sie ohnehin komplett).
+- Verbessert: Mitgeschnittene Benachrichtigungen erfassen jetzt den reicheren
+  Gesamttext (Chat-Zeilen, Mehrzeiler, Zusatzzeile) – mehr ist durchsuchbar.
+- Behoben: In Eingabefeldern war die Schrift auf dunklem Grund fast unsichtbar;
+  jetzt hell. Häkchen-Kästchen mit sichtbarem Rahmen.
+
 ## 0.49
 - Verbessert: Erfolglose ausgehende Anrufe (Dauer 0 – niemanden erreicht) werden
   in der Anrufe-Trefferliste jetzt als „ausgehend · nicht erreicht" gekennzeichnet.

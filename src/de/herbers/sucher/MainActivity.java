@@ -1644,7 +1644,6 @@ public class MainActivity extends Activity {
             body.setText(h.body);
             body.setTextColor(Color.parseColor("#C0C0C0"));
             body.setTextSize(13 * fs);
-            body.setMaxLines(3);
             col.addView(body);
             if (h.date > 0) col.addView(smallText(DateUtils.getRelativeTimeSpanString(h.date,
                     System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(), "#8899AA"));
@@ -1696,7 +1695,10 @@ public class MainActivity extends Activity {
         List<View> out = new ArrayList<>();
         for (CallHit h : hits) {
             LinearLayout row = resultRow(d);
-            row.addView(rowIcon(R.drawable.ic_call, Color.parseColor("#2E9BE6"), d));
+            boolean missedCall = h.type == android.provider.CallLog.Calls.MISSED_TYPE;
+            // gruen = erfolgreich, rot = verpasst, blau = vergeblich (abgehend ohne Verbindung)
+            String callColor = missedCall ? "#E0533A" : (h.failed ? "#2E9BE6" : "#5BD68A");
+            row.addView(rowIcon(R.drawable.ic_call, Color.parseColor(callColor), d));
             LinearLayout col = new LinearLayout(this);
             col.setOrientation(LinearLayout.VERTICAL);
             TextView t = new TextView(this);
@@ -2193,6 +2195,7 @@ public class MainActivity extends Activity {
             // einfach an. Name/Titel/Autor/Serie/Datum gelten fuer diesen
             // Ordner immer, unabhaengig davon.
             CheckBox contentCb = new CheckBox(this);
+            contentCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
             contentCb.setText("  Inhalt durchsuchbar machen (mehr Speicher, dauert länger)");
             contentCb.setTextColor(Color.parseColor("#B0B0B5"));
             contentCb.setTextSize(11.5f * fs);
@@ -2242,6 +2245,7 @@ public class MainActivity extends Activity {
 
         section(root, "Comic-Metadaten (CBZ)", d);
         CheckBox comicCb = new CheckBox(this);
+        comicCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         comicCb.setText("  ComicInfo.xml mit indizieren (Serie, Titel, Zusammenfassung)");
         comicCb.setTextColor(Color.WHITE);
         comicCb.setTextSize(13 * fs);
@@ -2251,6 +2255,7 @@ public class MainActivity extends Activity {
 
         section(root, "Archive durchsuchen (ZIP/7z/TAR)", d);
         CheckBox arcCb = new CheckBox(this);
+        arcCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         arcCb.setText("  Dokumente IN Archiven mitindizieren (teuer)");
         arcCb.setTextColor(Color.WHITE);
         arcCb.setTextSize(13 * fs);
@@ -2274,6 +2279,7 @@ public class MainActivity extends Activity {
 
         section(root, "Vorschaubilder", d);
         CheckBox thumbCb = new CheckBox(this);
+        thumbCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         thumbCb.setText("  Dauerhaft speichern (überleben „Cache leeren“ / SD Maid)");
         thumbCb.setTextColor(Color.WHITE);
         thumbCb.setTextSize(13 * fs);
@@ -2367,6 +2373,7 @@ public class MainActivity extends Activity {
         root.addView(reindex);
 
         CheckBox autoCb = new CheckBox(this);
+        autoCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         autoCb.setText("  Automatisch alle paar Stunden im Hintergrund aktualisieren");
         autoCb.setTextColor(Color.WHITE);
         autoCb.setTextSize(13 * fs);
@@ -2485,6 +2492,7 @@ public class MainActivity extends Activity {
 
         // Schalter + Knoepfe stehen bewusst ueber dem Protokoll (Mathias' Wunsch).
         CheckBox showLog = new CheckBox(this);
+        showLog.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         showLog.setText("  Protokoll anzeigen");
         showLog.setTextColor(Color.WHITE);
         showLog.setTextSize(13 * fs);
@@ -2708,6 +2716,7 @@ public class MainActivity extends Activity {
             String pkg = row[0];
             String label = row[1];
             CheckBox cb = new CheckBox(this);
+            cb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
             cb.setText("  " + label);
             cb.setTextColor(Color.WHITE);
             cb.setTextSize(13 * fs);
@@ -2777,6 +2786,7 @@ public class MainActivity extends Activity {
         box.addView(path);
 
         CheckBox contentCb = new CheckBox(this);
+        contentCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
         contentCb.setText("  Inhalt gleich mit durchsuchbar machen (mehr Speicher, dauert länger)");
         contentCb.setTextColor(Color.parseColor("#B0B0B5"));
         contentCb.setTextSize(11.5f * fs);

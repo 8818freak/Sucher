@@ -43,6 +43,11 @@ public class NotificationCapture extends NotificationListenerService {
         String[] tt = Notifications.titleAndText(n);
         String title = tt[0], text = tt[1];
         if (Notifications.isBlank(title, text)) return;
+        // Reicheren Gesamttext erfassen (InboxStyle-Zeilen, MessagingStyle-
+        // Nachrichten, Zusatzzeile) - so ist mehr durchsuchbar als nur die eine
+        // Textzeile. Faellt auf den Basistext zurueck, wenn nichts Reicheres da ist.
+        String rich = Notifications.richText(n);
+        if (rich != null && rich.length() > text.length()) text = rich;
 
         String pkg = sbn.getPackageName();
         String label = Notifications.appLabel(this, pkg);
