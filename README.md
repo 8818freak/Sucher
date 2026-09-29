@@ -103,7 +103,8 @@ into a 19MB ad-supported bundle. Free/open-source groundwork, same author.
 ## License
 
 GNU General Public License v3.0 (or later) — see `LICENSE`. Bundled
-third-party libraries (Apache POI, PDFBox-Android, Apache Commons,
+third-party libraries (Apache POI, PdfBox-Android, Apache Commons,
 Log4j API, SparseBitSet, curvesapi) remain under their own permissive
 licenses (Apache 2.0 / BSD-3-Clause), both compatible with GPLv3 —
-details in `LICENSE`.
+versions, links and the required notices are in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
