@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="de.herbers.sucher"
-    android:versionCode="47"
-    android:versionName="0.46">
+    android:versionCode="48"
+    android:versionName="0.47">
 
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
 
@@ -17,6 +17,10 @@
          bei Bedarf angefragt (siehe MainActivity.requestPimPermissions). -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- SMS und Anrufliste mitdurchsuchen - optional, erst bei Bedarf erteilt.
+         "Sensible" Rechte; bei Eigenverteilung (kein Play Store) unproblematisch. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <!-- Fuer die Erinnerung, wenn eine einmal erteilte Berechtigung fehlt (ab Android 13). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

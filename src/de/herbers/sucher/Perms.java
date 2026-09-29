@@ -48,6 +48,12 @@ final class Perms {
                 "Um Kontakte in die Suche einzubeziehen (optional)."));
         l.add(new PermReminder.Perm("calendar", "Termine", cal, appDetails(ctx),
                 "Um Termine in die Suche einzubeziehen (optional)."));
+        boolean sms = ctx.checkSelfPermission(android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+        boolean calls = ctx.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
+        l.add(new PermReminder.Perm("sms", "SMS", sms, appDetails(ctx),
+                "Um SMS-Nachrichten durchsuchbar zu machen (live abgefragt, nichts gespeichert)."));
+        l.add(new PermReminder.Perm("calls", "Anrufliste", calls, appDetails(ctx),
+                "Um die Anrufliste durchsuchbar zu machen (live abgefragt, nichts gespeichert)."));
         return l;
     }
 

@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.47
+- Neu: SMS und Anrufliste sind jetzt durchsuchbar (eigene Kategorien „SMS“ und
+  „Anrufe“). Treffer zeigen Kontaktnamen (falls bekannt), Richtung (ein-/
+  ausgehend), Vorschau bzw. Datum; Tippen öffnet die SMS- bzw. Wähl-App. Live
+  abgefragt – nichts wird gespeichert. Braucht die Rechte SMS bzw. Anrufliste
+  (unter „Berechtigungen“ erteilbar, optional).
+
 ## 0.46
 - Klarer formuliert: Der Benachrichtigungszugriff schneidet Benachrichtigungen
   erst AB dem Erteilen mit; schon erfasste bleiben auch nach Entzug in der

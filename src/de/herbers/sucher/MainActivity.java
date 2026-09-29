@@ -563,7 +563,7 @@ public class MainActivity extends Activity {
         row.setPadding(0, 8 * d, 0, 0);
         String[][] cats = {{"files", "Dateien"}, {"images", "Bilder"}, {"videos", "Videos"},
                 {"music", "Musik"}, {"contacts", "Kontakte"}, {"events", "Termine"},
-                {"notifs", "Nachrichten"}};
+                {"sms", "SMS"}, {"calls", "Anrufe"}, {"notifs", "Nachrichten"}};
         for (String[] cat : cats) row.addView(chip(cat[0], cat[1], d));
         hsv.addView(row);
         return hsv;
@@ -1204,6 +1204,8 @@ public class MainActivity extends Activity {
                     ? SearchStore.get(this).search(query, SEARCH_LIMIT, scopeSnap, folderSnap) : new ArrayList<>();
             final List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(query);
             final List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(query);
+            final List<SmsHit> sms = EXCLUDED_CATS.contains("sms") ? new ArrayList<>() : querySms(query);
+            final List<CallHit> calls = EXCLUDED_CATS.contains("calls") ? new ArrayList<>() : queryCalls(query);
             final List<SearchStore.NotifHit> notifs = new ArrayList<>();
             if (notif && !EXCLUDED_CATS.contains("notifs")) {
                 java.util.Set<String> allowed = Settings.notifSources(this);
@@ -1222,7 +1224,8 @@ public class MainActivity extends Activity {
                 if (!storage) results.addView(storagePermissionHint(d));
                 if (!pim) results.addView(pimPermissionHint(d));
                 if (!notif) results.addView(notifPermissionHint(d));
-                if (files.isEmpty() && contacts.isEmpty() && events.isEmpty() && notifs.isEmpty()) {
+                if (files.isEmpty() && contacts.isEmpty() && events.isEmpty()
+                        && sms.isEmpty() && calls.isEmpty() && notifs.isEmpty()) {
                     TextView none = new TextView(this);
                     none.setText("Keine Treffer.");
                     none.setTextColor(Color.parseColor("#8899AA"));
@@ -1246,6 +1249,8 @@ public class MainActivity extends Activity {
                 addFileCards(results, files, d, highlightHolder);
                 if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
                 if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
+                if (!sms.isEmpty()) results.addView(card("SMS", sms.size(), d, smsRows(sms, d), "sms"));
+                if (!calls.isEmpty()) results.addView(card("Anrufe", calls.size(), d, callRows(calls, d), "calls"));
                 if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));
                 if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
             });
@@ -1572,6 +1577,143 @@ public class MainActivity extends Activity {
             out.add(row);
         }
         return out;
+    }
+
+    // ---------- SMS ----------
+
+    private static final class SmsHit { String address, body; long date; boolean incoming; }
+
+    private List<SmsHit> querySms(String q) {
+        List<SmsHit> out = new ArrayList<>();
+        if (checkSelfPermission(android.Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) return out;
+        Uri uri = Uri.parse("content://sms");
+        String sel = "body LIKE ? OR address LIKE ?";
+        String like = "%" + q + "%";
+        try (Cursor c = getContentResolver().query(uri,
+                new String[]{"address", "body", "date", "type"}, sel, new String[]{like, like}, "date DESC")) {
+            if (c != null) {
+                while (c.moveToNext() && out.size() < 20) {
+                    SmsHit h = new SmsHit();
+                    h.address = c.getString(0);
+                    h.body = c.getString(1);
+                    h.date = c.isNull(2) ? 0 : c.getLong(2);
+                    h.incoming = c.getInt(3) == 1; // 1 = empfangen
+                    if (h.body != null) out.add(h);
+                }
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    private List<View> smsRows(List<SmsHit> hits, int d) {
+        List<View> out = new ArrayList<>();
+        for (SmsHit h : hits) {
+            LinearLayout row = resultRow(d);
+            row.addView(rowIcon(R.drawable.ic_sms, Color.parseColor("#5BD68A"), d));
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            TextView t = new TextView(this);
+            String who = contactNameForNumber(h.address);
+            t.setText((h.incoming ? "" : "→ ") + (who != null ? who : (h.address == null ? "?" : h.address)));
+            t.setTextColor(Color.WHITE);
+            t.setTextSize(14 * fs);
+            col.addView(t);
+            TextView body = new TextView(this);
+            body.setText(h.body);
+            body.setTextColor(Color.parseColor("#C0C0C0"));
+            body.setTextSize(13 * fs);
+            body.setMaxLines(3);
+            col.addView(body);
+            if (h.date > 0) col.addView(smallText(DateUtils.getRelativeTimeSpanString(h.date,
+                    System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(), "#8899AA"));
+            row.addView(col);
+            final String addr = h.address;
+            row.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("sms:" + (addr == null ? "" : addr)))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignored) {}
+            });
+            out.add(row);
+        }
+        return out;
+    }
+
+    // ---------- Anrufe ----------
+
+    private static final class CallHit { String number, name; int type; long date; }
+
+    private List<CallHit> queryCalls(String q) {
+        List<CallHit> out = new ArrayList<>();
+        if (checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return out;
+        String sel = android.provider.CallLog.Calls.NUMBER + " LIKE ? OR "
+                + android.provider.CallLog.Calls.CACHED_NAME + " LIKE ?";
+        String like = "%" + q + "%";
+        try (Cursor c = getContentResolver().query(android.provider.CallLog.Calls.CONTENT_URI,
+                new String[]{android.provider.CallLog.Calls.NUMBER, android.provider.CallLog.Calls.CACHED_NAME,
+                        android.provider.CallLog.Calls.TYPE, android.provider.CallLog.Calls.DATE},
+                sel, new String[]{like, like}, android.provider.CallLog.Calls.DATE + " DESC")) {
+            if (c != null) {
+                while (c.moveToNext() && out.size() < 20) {
+                    CallHit h = new CallHit();
+                    h.number = c.getString(0);
+                    h.name = c.getString(1);
+                    h.type = c.getInt(2);
+                    h.date = c.isNull(3) ? 0 : c.getLong(3);
+                    out.add(h);
+                }
+            }
+        } catch (Exception ignored) {}
+        return out;
+    }
+
+    private List<View> callRows(List<CallHit> hits, int d) {
+        List<View> out = new ArrayList<>();
+        for (CallHit h : hits) {
+            LinearLayout row = resultRow(d);
+            row.addView(rowIcon(R.drawable.ic_call, Color.parseColor("#2E9BE6"), d));
+            LinearLayout col = new LinearLayout(this);
+            col.setOrientation(LinearLayout.VERTICAL);
+            TextView t = new TextView(this);
+            t.setText(h.name != null && !h.name.isEmpty() ? h.name : (h.number == null ? "?" : h.number));
+            t.setTextColor(Color.WHITE);
+            t.setTextSize(14 * fs);
+            col.addView(t);
+            String dir;
+            switch (h.type) {
+                case android.provider.CallLog.Calls.INCOMING_TYPE: dir = "eingehend"; break;
+                case android.provider.CallLog.Calls.OUTGOING_TYPE: dir = "ausgehend"; break;
+                case android.provider.CallLog.Calls.MISSED_TYPE: dir = "verpasst"; break;
+                default: dir = "";
+            }
+            String when = h.date > 0 ? DateUtils.getRelativeTimeSpanString(h.date,
+                    System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString() : "";
+            col.addView(smallText((dir.isEmpty() ? "" : dir + " · ") + when, "#8899AA"));
+            row.addView(col);
+            final String num = h.number;
+            row.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + (num == null ? "" : num)))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignored) {}
+            });
+            out.add(row);
+        }
+        return out;
+    }
+
+    /** Kontaktname zu einer Telefonnummer (falls Kontakte-Zugriff besteht), sonst null. */
+    private String contactNameForNumber(String number) {
+        if (number == null || number.isEmpty()) return null;
+        if (checkSelfPermission(android.Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return null;
+        try {
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number));
+            try (Cursor c = getContentResolver().query(uri,
+                    new String[]{ContactsContract.PhoneLookup.DISPLAY_NAME}, null, null, null)) {
+                if (c != null && c.moveToFirst()) return c.getString(0);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     // ---------- gemeinsame Zeilen-Bausteine ----------
