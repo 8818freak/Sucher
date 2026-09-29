@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.45
+- Neu: Erinnerung, wenn eine einmal erteilte Berechtigung fehlt (Alle Dateien,
+  Benachrichtigungszugriff, Kontakte, Termine) – z. B. nach einem System-Update.
+  Die Meldung führt direkt zum Erteilen und lässt sich „Ignorieren“.
+- Neu/aufgeräumt: Ein aufklappbarer Abschnitt „Berechtigungen“ in den
+  Einstellungen (Dreieck ▸/▾) zeigt je Berechtigung Status und wofür sie
+  gebraucht wird; ein Tipp führt in die passende Systemeinstellung. Ersetzt die
+  früheren, verstreuten Einzel-Hinweise (keine doppelten Einstellungen).
+
 ## 0.44
 - Verbessert: Das Diagnose-Protokoll steht jetzt ganz unten in den
   Einstellungen, zeigt die neuesten Einträge zuerst, und alle Schaltflächen

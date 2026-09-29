@@ -34,6 +34,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -154,6 +155,7 @@ public class MainActivity extends Activity {
     private boolean folderPicking = false;
     private boolean notifSourcesOpen = false;
     private boolean advancedOpen = false;
+    private Boolean permsOpen = null; // null = Auto (offen, wenn etwas fehlt)
     private String browsePath = null;
     private boolean browseWantContent = false;
     private float fs = 1f;
@@ -214,6 +216,15 @@ public class MainActivity extends Activity {
         // zurueck navigieren muss.
         rebuild();
         IndexJobService.ensureScheduled(this);
+        // Ab Android 13 braucht das Posten von Benachrichtigungen (fuer die
+        // Berechtigungs-Erinnerung) eine Laufzeit-Berechtigung - einmal anfragen.
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+            try { requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 909); }
+            catch (Throwable ignored) {}
+        }
+        Perms.checkReminders(this);
     }
 
     @Override
@@ -1702,6 +1713,56 @@ public class MainActivity extends Activity {
 
     // ---------- Berechtigungen ----------
 
+    /** Aufklappbarer, erklaerter Berechtigungs-Abschnitt (Dreieck ▸/▾): alle
+     *  Berechtigungen mit Status + wofuer; ein Tipp fuehrt je Berechtigung in
+     *  die passende Systemeinstellung. Dieselbe Quelle wie die Erinnerung
+     *  (Perms.list) - keine doppelte Pflege. */
+    private void permsSection(LinearLayout root, int d) {
+        java.util.List<de.herbers.common.PermReminder.Perm> perms = Perms.list(this);
+        boolean anyMissing = false;
+        for (de.herbers.common.PermReminder.Perm p : perms) if (!p.granted) anyMissing = true;
+        boolean open = (permsOpen != null) ? permsOpen : anyMissing;
+
+        TextView head = new TextView(this);
+        head.setText((open ? "▾ " : "▸ ") + "Berechtigungen");
+        head.setTextColor(Color.parseColor("#2E9BE6"));
+        head.setTextSize(15 * fs);
+        head.setPadding(0, 14 * d, 0, 8 * d);
+        final boolean cur = open;
+        head.setOnClickListener(v -> { permsOpen = !cur; rebuild(); });
+        root.addView(head);
+        if (!open) return;
+
+        for (de.herbers.common.PermReminder.Perm perm : perms) {
+            TextView name = new TextView(this);
+            name.setText((perm.granted ? "✓  " : "✗  ") + perm.label + (perm.granted ? "" : "  –  fehlt"));
+            name.setTextColor(perm.granted ? Color.parseColor("#5BD68A") : Color.parseColor("#E0533A"));
+            name.setTextSize(14 * fs);
+            name.setPadding(4 * d, 8 * d, 4 * d, 2 * d);
+            root.addView(name);
+            if (perm.explanation != null && !perm.explanation.isEmpty()) {
+                TextView why = new TextView(this);
+                why.setText(perm.explanation);
+                why.setTextColor(Color.parseColor("#8899AA"));
+                why.setTextSize(12 * fs);
+                why.setPadding(4 * d, 0, 4 * d, 4 * d);
+                root.addView(why);
+            }
+            Button go = new Button(this);
+            go.setText(perm.granted ? "In den Einstellungen ändern" : "Jetzt erteilen");
+            go.setOnClickListener(v -> {
+                try {
+                    Intent i = perm.settings;
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Throwable t) {
+                    Toast.makeText(this, "Einstellung nicht verfügbar", Toast.LENGTH_SHORT).show();
+                }
+            });
+            root.addView(go);
+        }
+    }
+
     static boolean hasStoragePermission() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager();
     }
@@ -1889,10 +1950,12 @@ public class MainActivity extends Activity {
         intro.setPadding(0, 10 * d, 0, 10 * d);
         root.addView(intro);
 
+        // Speicherzugriff ist Voraussetzung: fehlt er, nur diesen Prompt zeigen.
         if (!hasStoragePermission()) { root.addView(storagePermissionHint(d)); return; }
-        if (!hasPimPermission()) root.addView(pimPermissionHint(d));
-        if (!hasNotifPermission()) root.addView(notifPermissionHint(d));
-        else buildNotifSourcesToggle(root, d);
+        // Alle Berechtigungen in EINEM aufklappbaren, erklaerten Abschnitt
+        // (keine doppelten Einstellungen; ersetzt die frueheren Einzel-Hinweise).
+        permsSection(root, d);
+        if (hasNotifPermission()) buildNotifSourcesToggle(root, d);
 
         section(root, "Schriftgröße", d);
         buildFontScaleRow(root, d);
