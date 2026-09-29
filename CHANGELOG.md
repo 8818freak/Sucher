@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.30
+- Wiederherstellen der Einstellungen war defekt und funktioniert jetzt: Die
+  Sicherung nutzt die gemeinsame Bibliothek herbers-android-common (Git-Submodul,
+  de.herbers.common.SettingsBackup). Der alte Import erwartete ein anderes
+  Feld-Layout als der Export erzeugte und stellte darum nichts wieder her.
+  Auch colorFor kommt jetzt aus der gemeinsamen Bibliothek.
+
 ## 0.29
 - Große Medien-Ordner (Fotos, Musik, Videos) werden jetzt zuverlässig
   mitindiziert. Vorher blieb der Indizierlauf im riesigen Bücher-Ordner hängen

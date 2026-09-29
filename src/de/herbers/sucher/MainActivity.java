@@ -1306,11 +1306,11 @@ public class MainActivity extends Activity {
         return i < 0 ? "" : name.substring(i + 1).toLowerCase(java.util.Locale.ROOT);
     }
 
-    /** Stabile, unterscheidbare Farbe je Schluessel (z.B. Dateiendung) -
-     *  wie BaseTab.colorFor in EdgeTab, hier lokal statt geerbt. */
+    /** Stabile, unterscheidbare Farbe je Schluessel (z.B. Dateiendung) - jetzt
+     *  aus der gemeinsamen Bibliothek (de.herbers.common.ColorUtil), damit
+     *  EdgeTab/Sucher dieselbe Farbwahl teilen. */
     private static int colorFor(String key) {
-        int hue = Math.floorMod(key == null ? 0 : key.hashCode(), 360);
-        return Color.HSVToColor(new float[]{hue, 0.5f, 0.85f});
+        return de.herbers.common.ColorUtil.colorFor(key);
     }
 
     // ---------- Kontakte ----------
