@@ -4,6 +4,18 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.39
+- Behoben (kritisch): Nach dem 0.37-Umbau lief die Suche in einem einzelnen
+  Hintergrund-Thread ohne Trefferbegrenzung. Eine sehr häufige Suche (z. B.
+  „sex") band diesen Thread dauerhaft und blockierte danach *jede* weitere
+  Suche – es kamen gar keine Ergebnisse mehr. Die Suche ist jetzt auf die
+  ersten 500 Treffer begrenzt (mit Hinweis, wenn mehr vorhanden sind) und
+  veraltete Anfragen werden früh verworfen.
+- Verbessert: Die Vorschlagsliste der Dateiendungen (erweiterte Suche) ist
+  jetzt nach Kategorien gruppiert (E-Books, Dokumente, Tabellen, Präsentationen,
+  Comics, Bilder, Audio, Video, Web & Daten), innerhalb jeder Kategorie
+  alphabetisch, jeweils mit kurzer Klartext-Erklärung.
+
 ## 0.38
 - Behoben: In MOBI-Texten konnte an den internen Record-Grenzen (etwa alle
   4 KB) ein Wort verstümmelt werden mit ein paar Müllzeichen (z. B. „Neigung" →

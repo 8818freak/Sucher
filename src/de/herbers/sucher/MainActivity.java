@@ -116,6 +116,12 @@ public class MainActivity extends Activity {
     // haeufige Volltext-Anfrage den UI-Thread nicht mehr blockiert (ANR).
     private static final java.util.concurrent.ExecutorService SEARCH_EXEC =
             java.util.concurrent.Executors.newSingleThreadExecutor();
+    // Obergrenze fuer die Sofort-Suche (Suche-beim-Tippen): ein sehr haeufiges
+    // Wort wie "sex" trifft als Praefix ("sex"*) zehntausende Dateien; die alle
+    // samt Schnipsel zu holen dauert selbst im Hintergrund ewig. Erste Treffer
+    // schnell zeigen, Rest per Verfeinern/erweiterter Suche. (Die erweiterte
+    // Suche selbst filtert ueber Metadaten, nicht Volltext, und bleibt schnell.)
+    private static final int SEARCH_LIMIT = 500;
     private static final java.util.Set<String> THUMB_TRIED =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
@@ -695,24 +701,32 @@ public class MainActivity extends Activity {
             sugHead.setTextSize(11 * fs);
             sugHead.setPadding(0, 10 * d, 0, 2 * d);
             wrap.addView(sugHead);
-            for (java.util.Map.Entry<String, String> e : EXT_INFO.entrySet()) {
-                final String key = e.getKey();
-                boolean on = advExts.contains(key);
-                TextView row = new TextView(this);
-                row.setText(key + "  —  " + e.getValue());
-                row.setTextColor(on ? Color.WHITE : Color.parseColor("#B0BEC5"));
-                row.setTextSize(13 * fs);
-                row.setPadding(10 * d, 8 * d, 10 * d, 8 * d);
-                GradientDrawable rbg = new GradientDrawable();
-                rbg.setCornerRadius(8 * d);
-                rbg.setColor(on ? Color.parseColor("#2E9BE6") : Color.parseColor("#2C2C2E"));
-                row.setBackground(rbg);
-                LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                rlp.setMargins(0, 2 * d, 0, 2 * d);
-                row.setLayoutParams(rlp);
-                row.setOnClickListener(v -> { if (advExts.contains(key)) advExts.remove(key); else advExts.add(key); rebuild(); });
-                wrap.addView(row);
+            for (java.util.Map.Entry<String, String[][]> catE : EXT_CATS.entrySet()) {
+                TextView catHead = new TextView(this);
+                catHead.setText(catE.getKey());
+                catHead.setTextColor(Color.parseColor("#7FB0D0"));
+                catHead.setTextSize(12 * fs);
+                catHead.setPadding(2 * d, 8 * d, 0, 2 * d);
+                wrap.addView(catHead);
+                for (String[] it : catE.getValue()) {
+                    final String key = it[0];
+                    boolean on = advExts.contains(key);
+                    TextView row = new TextView(this);
+                    row.setText(key + "  —  " + it[1]);
+                    row.setTextColor(on ? Color.WHITE : Color.parseColor("#B0BEC5"));
+                    row.setTextSize(13 * fs);
+                    row.setPadding(10 * d, 8 * d, 10 * d, 8 * d);
+                    GradientDrawable rbg = new GradientDrawable();
+                    rbg.setCornerRadius(8 * d);
+                    rbg.setColor(on ? Color.parseColor("#2E9BE6") : Color.parseColor("#2C2C2E"));
+                    row.setBackground(rbg);
+                    LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    rlp.setMargins(0, 2 * d, 0, 2 * d);
+                    row.setLayoutParams(rlp);
+                    row.setOnClickListener(v -> { if (advExts.contains(key)) advExts.remove(key); else advExts.add(key); rebuild(); });
+                    wrap.addView(row);
+                }
             }
 
             // (3) Tatsaechlich im Index vorhandene Endungen (Ueberblick, deckt
@@ -769,41 +783,19 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Bekannte Dateiendungen mit Klartext-Erklaerung fuer die Vorschlagsliste
-     *  in der erweiterten Suche (Reihenfolge = Anzeigereihenfolge). */
-    private static final java.util.LinkedHashMap<String, String> EXT_INFO = new java.util.LinkedHashMap<>();
+    /** Bekannte Dateiendungen nach Kategorie (mit Kurzerklaerung), innerhalb je
+     *  Kategorie alphabetisch - fuer die Vorschlagsliste der erweiterten Suche. */
+    private static final java.util.LinkedHashMap<String, String[][]> EXT_CATS = new java.util.LinkedHashMap<>();
     static {
-        EXT_INFO.put("epub", "E-Book (elektronisches Buch)");
-        EXT_INFO.put("mobi", "Kindle-Buch (MOBI)");
-        EXT_INFO.put("azw3", "Kindle-Buch (AZW3)");
-        EXT_INFO.put("azw", "Kindle-Buch (AZW)");
-        EXT_INFO.put("fb2", "E-Book (FictionBook)");
-        EXT_INFO.put("pdf", "PDF-Dokument");
-        EXT_INFO.put("txt", "Textdokument");
-        EXT_INFO.put("md", "Markdown-Text");
-        EXT_INFO.put("rtf", "Rich-Text-Dokument");
-        EXT_INFO.put("doc", "Word-Dokument (älter)");
-        EXT_INFO.put("docx", "Word-Dokument");
-        EXT_INFO.put("xls", "Excel-Tabelle (älter)");
-        EXT_INFO.put("xlsx", "Excel-Tabelle");
-        EXT_INFO.put("ppt", "PowerPoint (älter)");
-        EXT_INFO.put("pptx", "PowerPoint-Präsentation");
-        EXT_INFO.put("csv", "Tabelle (CSV)");
-        EXT_INFO.put("cbz", "Comic-Archiv (CBZ/ZIP)");
-        EXT_INFO.put("cbr", "Comic-Archiv (CBR/RAR)");
-        EXT_INFO.put("jpg", "Bild (JPEG)");
-        EXT_INFO.put("png", "Bild (PNG)");
-        EXT_INFO.put("gif", "Bild (GIF)");
-        EXT_INFO.put("webp", "Bild (WebP)");
-        EXT_INFO.put("html", "Webseite (HTML)");
-        EXT_INFO.put("xml", "XML-Datei");
-        EXT_INFO.put("json", "JSON-Datei");
-        EXT_INFO.put("zip", "ZIP-Archiv");
-        EXT_INFO.put("mp3", "Audio (MP3)");
-        EXT_INFO.put("m4a", "Audio (M4A)");
-        EXT_INFO.put("flac", "Audio (FLAC)");
-        EXT_INFO.put("mp4", "Video (MP4)");
-        EXT_INFO.put("mkv", "Video (MKV)");
+        EXT_CATS.put("E-Books", new String[][]{{"azw","Kindle-Buch (AZW)"},{"azw3","Kindle-Buch (AZW3)"},{"epub","E-Book (EPUB)"},{"fb2","E-Book (FictionBook)"},{"mobi","Kindle-Buch (MOBI)"}});
+        EXT_CATS.put("Dokumente", new String[][]{{"doc","Word-Dokument (älter)"},{"docx","Word-Dokument"},{"md","Markdown-Text"},{"pdf","PDF-Dokument"},{"rtf","Rich-Text-Dokument"},{"txt","Textdokument"}});
+        EXT_CATS.put("Tabellen", new String[][]{{"csv","Tabelle (CSV)"},{"xls","Excel-Tabelle (älter)"},{"xlsx","Excel-Tabelle"}});
+        EXT_CATS.put("Präsentationen", new String[][]{{"ppt","PowerPoint (älter)"},{"pptx","PowerPoint-Präsentation"}});
+        EXT_CATS.put("Comics", new String[][]{{"cbr","Comic-Archiv (CBR/RAR)"},{"cbz","Comic-Archiv (CBZ/ZIP)"}});
+        EXT_CATS.put("Bilder", new String[][]{{"bmp","Bild (BMP)"},{"gif","Bild (GIF)"},{"jpg","Bild (JPEG)"},{"png","Bild (PNG)"},{"webp","Bild (WebP)"}});
+        EXT_CATS.put("Audio", new String[][]{{"flac","Audio (FLAC)"},{"m4a","Audio (M4A)"},{"mp3","Audio (MP3)"}});
+        EXT_CATS.put("Video", new String[][]{{"mkv","Video (MKV)"},{"mp4","Video (MP4)"}});
+        EXT_CATS.put("Web & Daten", new String[][]{{"html","Webseite (HTML)"},{"json","JSON-Datei"},{"xml","XML-Datei"},{"zip","ZIP-Archiv"}});
     }
 
     private interface TextSink { void set(String s); }
@@ -1192,8 +1184,12 @@ public class MainActivity extends Activity {
         final java.util.Collection<String> scopeSnap = scopePaths;
         final String folderSnap = scopeFolder;
         SEARCH_EXEC.execute(() -> {
+            // Schon ueberholt (weitergetippt)? Dann gar nicht erst die (evtl. teure)
+            // Abfrage starten - sonst staut sich der Single-Thread mit veralteten
+            // Suchen zu und blockiert die aktuelle.
+            if (!query.equals(lastQuery)) return;
             final List<SearchStore.FileHit> files = (storage && anyFileCat)
-                    ? SearchStore.get(this).search(query, -1, scopeSnap, folderSnap) : new ArrayList<>();
+                    ? SearchStore.get(this).search(query, SEARCH_LIMIT, scopeSnap, folderSnap) : new ArrayList<>();
             final List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(query);
             final List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(query);
             final List<SearchStore.NotifHit> notifs = new ArrayList<>();
@@ -1224,6 +1220,16 @@ public class MainActivity extends Activity {
                 }
                 // Die zuletzt geoeffnete Datei hervorheben und ins Blickfeld
                 // scrollen (Mathias' Wunsch) - addFileCards klappt ihre Karte auf.
+                if (files.size() >= SEARCH_LIMIT) {
+                    TextView many = new TextView(this);
+                    many.setText("Sehr viele Treffer – die ersten " + SEARCH_LIMIT
+                            + " werden gezeigt. Zum Eingrenzen: Suchbegriff ergänzen,"
+                            + " „In Ordner suchen…“ oder die erweiterte Suche nutzen.");
+                    many.setTextColor(Color.parseColor("#E0A030"));
+                    many.setTextSize(12 * fs);
+                    many.setPadding(0, 0, 0, 6 * d);
+                    results.addView(many);
+                }
                 View[] highlightHolder = new View[1];
                 addFileCards(results, files, d, highlightHolder);
                 if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
