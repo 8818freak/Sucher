@@ -5,6 +5,11 @@ als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
 ## 0.36
+- Behoben: MOBI-Titelbilder erschienen nie. Die Cover-Erkennung verließ sich auf
+  ein MOBI-Kopf-Feld, das in vielen Dateien 0/unzuverlässig ist; jetzt wird der
+  erste eingebettete Bild-Record gesucht (mit Fallback). MOBIs, die ein Cover
+  enthalten, bekommen nun ein Titelbild (Dateien ohne eingebettetes Cover
+  natürlich weiterhin nicht).
 - Neu: Suche nach Dateiendung erweitert. In der erweiterten Suche unter
   „Dateiart" gibt es jetzt (a) eine freie Eingabe für beliebige Endungen (auch
   solche, die noch nicht im Index sind) und (b) eine Vorschlagsliste mit
