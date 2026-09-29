@@ -1,19 +1,18 @@
 package de.herbers.sucher;
 
 import android.app.Notification;
-import android.content.pm.ApplicationInfo;
-import android.content.pm.PackageManager;
-import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+
+import de.herbers.common.Notifications;
 
 /**
  * Schneidet Systembenachrichtigungen mit und legt Titel/Text im SearchStore
  * ab, damit sie durchsuchbar sind - deckt Chats/Mails/Messenger teilweise ab,
  * ohne an deren eigene (verschluesselte/gesperrte) Datenbanken zu muessen.
- * Gleicher Mechanismus wie EdgeTabs NotificationCollector fuer die
- * Posteingang-Karte, hier aber nur zum Indizieren - keine Antworten-/
- * Loeschen-Aktionen noetig.
+ * Gleicher Kern wie EdgeTabs NotificationCollector (de.herbers.common.
+ * Notifications), hier aber nur zum Indizieren - keine Antworten-/Loeschen-
+ * Aktionen noetig.
  *
  * Grenzen (wichtig, siehe MainActivity.notifPermissionHint): nur was
  * tatsaechlich als Benachrichtigung durchkam, waehrend Sucher lief und die
@@ -36,19 +35,14 @@ public class NotificationCapture extends NotificationListenerService {
         if (n == null) return;
 
         // Reine Gruppen-Zusammenfassung ueberspringen (kein Einzelinhalt).
-        if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
+        if (Notifications.isGroupSummary(n)) return;
 
-        Bundle ex = n.extras;
-        CharSequence titleCs = ex == null ? null : ex.getCharSequence(Notification.EXTRA_TITLE);
-        CharSequence textCs = ex == null ? null : ex.getCharSequence(Notification.EXTRA_TEXT);
-        CharSequence bigCs = ex == null ? null : ex.getCharSequence(Notification.EXTRA_BIG_TEXT);
-        String title = titleCs == null ? null : titleCs.toString();
-        String text = textCs == null ? null : textCs.toString();
-        if (bigCs != null && (text == null || bigCs.length() > text.length())) text = bigCs.toString();
-        if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) return;
+        String[] tt = Notifications.titleAndText(n);
+        String title = tt[0], text = tt[1];
+        if (Notifications.isBlank(title, text)) return;
 
         String pkg = sbn.getPackageName();
-        String label = appLabel(pkg);
+        String label = Notifications.appLabel(this, pkg);
         String finalText = text;
         long postTime = sbn.getPostTime();
         // onNotificationPosted runs on the main thread; addNotification() hits
@@ -58,15 +52,5 @@ public class NotificationCapture extends NotificationListenerService {
         new Thread(() ->
             SearchStore.get(this).addNotification(pkg, label, title, finalText, postTime)
         ).start();
-    }
-
-    private String appLabel(String pkg) {
-        try {
-            PackageManager pm = getPackageManager();
-            ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
-            CharSequence l = pm.getApplicationLabel(ai);
-            if (l != null && l.length() > 0) return l.toString();
-        } catch (Exception ignored) {}
-        return pkg;
     }
 }
