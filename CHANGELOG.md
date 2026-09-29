@@ -4,6 +4,13 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.37
+- Behoben: Die App konnte beim Tippen einer häufigen Suche (z. B. „sex" mit
+  zehntausenden Volltext-Treffern) einfrieren/„reagiert nicht" melden (ANR). Die
+  Suche läuft jetzt im Hintergrund; die Oberfläche bleibt bedienbar, während
+  „Suche läuft …" angezeigt wird. Veraltete Anfragen (beim Weitertippen) werden
+  verworfen.
+
 ## 0.36
 - Behoben: MOBI-Texte hatten falsche Sonderzeichen (Mojibake: „ü" wurde zu
   „Ã¼", „©" zu „Â©") – im Volltext-Index und in der Vorschau. Der Text wird

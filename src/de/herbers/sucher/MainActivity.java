@@ -112,6 +112,10 @@ public class MainActivity extends Activity {
     // blieben lange nur die Datei-Symbole stehen).
     private static final java.util.concurrent.Executor THUMB_EXEC =
             java.util.concurrent.Executors.newFixedThreadPool(3);
+    // Ein einzelner Thread fuer die Suche selbst (Datenabruf), damit eine
+    // haeufige Volltext-Anfrage den UI-Thread nicht mehr blockiert (ANR).
+    private static final java.util.concurrent.ExecutorService SEARCH_EXEC =
+            java.util.concurrent.Executors.newSingleThreadExecutor();
     private static final java.util.Set<String> THUMB_TRIED =
             java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
 
@@ -1159,8 +1163,8 @@ public class MainActivity extends Activity {
     }
 
     private void runSearch(String q, LinearLayout results, int d) {
-        results.removeAllViews();
         FILE_SHOWN.clear(); // frische Suche -> Anzeige-Zähler zurücksetzen
+        results.removeAllViews();
         if (q == null || q.trim().length() < 2) {
             TextView hint = new TextView(this);
             hint.setText("Mindestens 2 Zeichen eingeben.");
@@ -1169,46 +1173,65 @@ public class MainActivity extends Activity {
             results.addView(hint);
             return;
         }
-        if (!hasStoragePermission()) results.addView(storagePermissionHint(d));
-        if (!hasPimPermission()) results.addView(pimPermissionHint(d));
-        if (!hasNotifPermission()) results.addView(notifPermissionHint(d));
+        // Datenabruf im HINTERGRUND: eine haeufige Volltext-Anfrage (z.B. "sex")
+        // trifft zehntausende Treffer; getCount()/fillWindow auf dem UI-Thread
+        // blockierte >5 s -> ANR (Absturzbericht 2026-09-29). Ergebnis wird auf
+        // dem Main-Thread aufgebaut; veraltete (weitergetippte) Anfragen verworfen.
+        TextView busy = new TextView(this);
+        busy.setText("Suche läuft …");
+        busy.setTextColor(Color.parseColor("#8899AA"));
+        busy.setTextSize(13 * fs);
+        results.addView(busy);
 
-        boolean anyFileCat = !(EXCLUDED_CATS.contains("files") && EXCLUDED_CATS.contains("images")
+        final String query = q;
+        final boolean storage = hasStoragePermission();
+        final boolean pim = hasPimPermission();
+        final boolean notif = hasNotifPermission();
+        final boolean anyFileCat = !(EXCLUDED_CATS.contains("files") && EXCLUDED_CATS.contains("images")
                 && EXCLUDED_CATS.contains("videos") && EXCLUDED_CATS.contains("music"));
-        List<SearchStore.FileHit> files = (hasStoragePermission() && anyFileCat)
-                ? SearchStore.get(this).search(q, -1, scopePaths, scopeFolder) : new ArrayList<>();
-        List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(q);
-        List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(q);
-        List<SearchStore.NotifHit> notifs = new ArrayList<>();
-        if (hasNotifPermission() && !EXCLUDED_CATS.contains("notifs")) {
-            java.util.Set<String> allowed = Settings.notifSources(this);
-            for (SearchStore.NotifHit h : SearchStore.get(this).searchNotifications(q, 200)) {
-                if (allowed.contains(h.pkg)) notifs.add(h);
-                if (notifs.size() >= 60) break;
+        final java.util.Collection<String> scopeSnap = scopePaths;
+        final String folderSnap = scopeFolder;
+        SEARCH_EXEC.execute(() -> {
+            final List<SearchStore.FileHit> files = (storage && anyFileCat)
+                    ? SearchStore.get(this).search(query, -1, scopeSnap, folderSnap) : new ArrayList<>();
+            final List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(query);
+            final List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(query);
+            final List<SearchStore.NotifHit> notifs = new ArrayList<>();
+            if (notif && !EXCLUDED_CATS.contains("notifs")) {
+                java.util.Set<String> allowed = Settings.notifSources(this);
+                for (SearchStore.NotifHit h : SearchStore.get(this).searchNotifications(query, 200)) {
+                    if (allowed.contains(h.pkg)) notifs.add(h);
+                    if (notifs.size() >= 60) break;
+                }
             }
-        }
-
-        if (files.isEmpty() && contacts.isEmpty() && events.isEmpty() && notifs.isEmpty()) {
-            TextView none = new TextView(this);
-            none.setText("Keine Treffer.");
-            none.setTextColor(Color.parseColor("#8899AA"));
-            none.setTextSize(13 * fs);
-            results.addView(none);
-            return;
-        }
-
-        // Die zuletzt geoeffnete Datei deutlich erkennbar machen und ins
-        // Blickfeld scrollen, wenn man aus einer anderen App/der Vorschau
-        // zurueckkommt (Mathias' Wunsch) - dafuer muss ihre Karte ggf.
-        // aufgeklappt sein (erledigt addFileCards je Kategorie).
-        View[] highlightHolder = new View[1];
-
-        addFileCards(results, files, d, highlightHolder);
-        if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
-        if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
-        if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));
-
-        if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
+            runOnUiThread(() -> {
+                // Nur anzeigen, wenn diese Anfrage noch die aktuelle ist
+                // (Nutzer koennte weiter getippt oder zur erweiterten Suche
+                // gewechselt haben).
+                if (isFinishing() || isDestroyed()) return;
+                if (lastSearchWasAdvanced || !query.equals(lastQuery)) return;
+                results.removeAllViews();
+                if (!storage) results.addView(storagePermissionHint(d));
+                if (!pim) results.addView(pimPermissionHint(d));
+                if (!notif) results.addView(notifPermissionHint(d));
+                if (files.isEmpty() && contacts.isEmpty() && events.isEmpty() && notifs.isEmpty()) {
+                    TextView none = new TextView(this);
+                    none.setText("Keine Treffer.");
+                    none.setTextColor(Color.parseColor("#8899AA"));
+                    none.setTextSize(13 * fs);
+                    results.addView(none);
+                    return;
+                }
+                // Die zuletzt geoeffnete Datei hervorheben und ins Blickfeld
+                // scrollen (Mathias' Wunsch) - addFileCards klappt ihre Karte auf.
+                View[] highlightHolder = new View[1];
+                addFileCards(results, files, d, highlightHolder);
+                if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
+                if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
+                if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));
+                if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
+            });
+        });
     }
 
     /** Die uebergebene Zeile ins Blickfeld scrollen - Summe der getTop()-
