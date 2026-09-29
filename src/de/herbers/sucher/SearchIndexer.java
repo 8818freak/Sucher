@@ -1,5 +1,8 @@
 package de.herbers.sucher;
 
+import de.herbers.common.DiagLog;
+import de.herbers.common.Diagnostics;
+
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
@@ -266,11 +269,8 @@ final class SearchIndexer {
     private static void logWorkerStack(Context app, Thread worker, String warum) {
         if (worker == null) return;
         try {
-            StringBuilder sb = new StringBuilder("Indizierer-Stack (" + warum + "):");
-            StackTraceElement[] st = worker.getStackTrace();
-            if (st == null || st.length == 0) { sb.append(" (leer)"); }
-            else for (int i = 0; i < Math.min(st.length, 18); i++) sb.append("\n    at ").append(st[i]);
-            DiagLog.log(app, sb.toString());
+            DiagLog.log(app, "Indizierer-Stack (" + warum + "):"
+                    + Diagnostics.stackOf(worker, 18));
         } catch (Throwable ignored) {}
     }
 

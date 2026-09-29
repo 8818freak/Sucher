@@ -1,5 +1,7 @@
 package de.herbers.sucher;
 
+import de.herbers.common.DiagLog;
+
 import android.app.job.JobInfo;
 import android.app.job.JobParameters;
 import android.app.job.JobScheduler;

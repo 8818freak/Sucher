@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.34
+- Intern: Das Diagnose-Protokoll und die neue Stapel-Erfassung bei Hängern
+  kommen jetzt aus der gemeinsamen Bibliothek herbers-android-common
+  (de.herbers.common.DiagLog / Diagnostics) statt aus eigenem Code – dieselbe
+  Diagnose wie künftig in EdgeTab und ActiveFrames.
+- Neu: Unerwartete Abstürze werden mit vollem Stack ins Diagnose-Protokoll
+  geschrieben (Absturz-Logger), damit sich auch seltene Fehler nachvollziehen
+  lassen. Keine sichtbare Änderung im normalen Betrieb.
+
 ## 0.33
 - Behoben: Der Indizierer konnte dauerhaft hängenbleiben und markierte dabei
   eine zufällige, unschuldige Datei als „problematisch" (was nichts half – beim

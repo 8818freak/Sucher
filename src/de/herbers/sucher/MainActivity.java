@@ -1,5 +1,7 @@
 package de.herbers.sucher;
 
+import de.herbers.common.DiagLog;
+
 import android.app.Activity;
 import android.content.ContentUris;
 import android.content.Context;
