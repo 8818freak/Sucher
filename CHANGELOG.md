@@ -4,6 +4,12 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.38
+- Behoben: In MOBI-Texten konnte an den internen Record-Grenzen (etwa alle
+  4 KB) ein Wort verstümmelt werden mit ein paar Müllzeichen (z. B. „Neigung" →
+  „Neig�ung"). Jeder Textabschnitt wird jetzt korrekt auf seine deklarierte
+  Größe begrenzt.
+
 ## 0.37
 - Behoben: Die App konnte beim Tippen einer häufigen Suche (z. B. „sex" mit
   zehntausenden Volltext-Treffern) einfrieren/„reagiert nicht" melden (ANR). Die
