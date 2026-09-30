@@ -308,11 +308,10 @@ final class SearchIndexer {
     // Ordner als diese Grenze; ein Alias-Ring erreicht sie in Sekunden.
     private static final int MAX_DIRS = 300_000;
 
-    // Nur voruebergehende Diagnose (siehe Log-Tag "EdgeTabSearchDiag") fuer
-    // den bislang nicht sicher root-verursachten CPU-/Akku-Haenger: loggt
-    // jeden 2000. walk()-Aufruf mit Tiefe/Pfad, damit ein naechstes
-    // Auftreten per logcat tatsaechlich zeigt, WO die Rekursion feststeckt,
-    // statt weiter zu raten. Wieder entfernen, sobald die Ursache klar ist.
+    // Zaehlt jeden walk()-Aufruf. Load-bearing: der Watchdog (startWatchdog)
+    // erkennt an einer Veraenderung dieses Zaehlers ODER von scanned, dass der
+    // Lauf noch Fortschritt macht, und greift nur ein, wenn beide stillstehen.
+    // Nicht entfernen (nur der frueher hier haengende Diagnose-Log ist raus).
     private static int walkCallCounter = 0;
 
     /** Einen nicht auflistbaren Wurzelordner auf den zugänglichen internen
@@ -337,11 +336,7 @@ final class SearchIndexer {
     }
 
     private static void walk(SearchStore store, File dir, int depth) {
-        int n = ++walkCallCounter;
-        if (n % 2000 == 0) {
-            android.util.Log.d("EdgeTabSearchDiag", "walk #" + n + " depth=" + depth
-                    + " visitedSize=" + visitedCanonical.size() + " dir=" + dir);
-        }
+        ++walkCallCounter;   // Fortschrittssignal fuer den Watchdog (siehe startWatchdog)
         if (depth > MAX_DEPTH) {
             android.util.Log.w("EdgeTabSearch", "Abbruch: Ordner zu tief verschachtelt (moeglicher Pfad-Alias-Ring): " + dir);
             return;
@@ -497,6 +492,10 @@ final class SearchIndexer {
                 String path = pe[0], ext = pe[1];
                 if (skipContentCached.contains(path)) continue;
                 if (!Thumbnails.canHaveThumb(ext)) continue;
+                // Reine Bilder beim Vorwaermen ueberspringen - sie erscheinen beim
+                // Anzeigen ohnehin sofort; so bleibt das Kontingent (THUMB_BATCH)
+                // fuer teure Titelbilder (Buch-Cover, PDF, Office).
+                if (Thumbnails.isImageExt(ext)) continue;
                 if (Thumbnails.exists(app, path)) continue;
                 File f = new File(path);
                 if (!f.isFile()) continue;

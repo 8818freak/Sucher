@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.52
+- Behoben: Reine Text- und Code-Dateien wurden beim Indizieren mitunter schon
+  nach dem Anfang abgeschnitten; jetzt wird bis zum Ende gelesen, sodass der
+  ganze Inhalt durchsuchbar ist.
+- Verbessert: Das Vorwärmen der Vorschaubilder überspringt reine Bilder (die
+  erscheinen beim Anzeigen ohnehin sofort) und verwendet sein Kontingent für die
+  aufwendigen Titelbilder – Buch-Cover sowie PDF- und Office-Vorschauen sind
+  schneller da, auch bei vielen tausend Fotos.
+
 ## 0.51
 - Neu: Jede mitgeschnittene Benachrichtigung wird jetzt **verlustfrei**
   gespeichert – alle Felder, die sie mitbrachte (über die Bibliothek
