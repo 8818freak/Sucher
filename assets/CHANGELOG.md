@@ -4,6 +4,167 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 0.51
+- Neu: Jede mitgeschnittene Benachrichtigung wird jetzt **verlustfrei**
+  gespeichert – alle Felder, die sie mitbrachte (über die Bibliothek
+  `Notifications.toJson`), nicht mehr nur Titel und Text. Der volle Text bleibt
+  durchsuchbar und jedes Feld später auswertbar.
+
+## 0.50
+- Verbessert: Anruf-Farben – grün = erfolgreich, rot = verpasst, blau =
+  vergeblich (abgehend, niemanden erreicht).
+- Verbessert: SMS werden in der Trefferliste in voller Länge angezeigt (durchsucht
+  wurden sie ohnehin komplett).
+- Verbessert: Mitgeschnittene Benachrichtigungen erfassen jetzt den reicheren
+  Gesamttext (Chat-Zeilen, Mehrzeiler, Zusatzzeile) – mehr ist durchsuchbar.
+- Behoben: In Eingabefeldern war die Schrift auf dunklem Grund fast unsichtbar;
+  jetzt hell. Häkchen-Kästchen mit sichtbarem Rahmen.
+
+## 0.49
+- Verbessert: Erfolglose ausgehende Anrufe (Dauer 0 – niemanden erreicht) werden
+  in der Anrufe-Trefferliste jetzt als „ausgehend · nicht erreicht" gekennzeichnet.
+
+## 0.48
+- Neu: Sucher kann von anderen Apps mit einem Suchbegriff geöffnet werden (Intent
+  mit „query“ bzw. ACTION_SEARCH) – z. B. über EdgeTabs „In Sucher suchen“. Der
+  Begriff wird vorbelegt und sofort gesucht.
+
+## 0.47
+- Neu: SMS und Anrufliste sind jetzt durchsuchbar (eigene Kategorien „SMS“ und
+  „Anrufe“). Treffer zeigen Kontaktnamen (falls bekannt), Richtung (ein-/
+  ausgehend), Vorschau bzw. Datum; Tippen öffnet die SMS- bzw. Wähl-App. Live
+  abgefragt – nichts wird gespeichert. Braucht die Rechte SMS bzw. Anrufliste
+  (unter „Berechtigungen“ erteilbar, optional).
+
+## 0.46
+- Klarer formuliert: Der Benachrichtigungszugriff schneidet Benachrichtigungen
+  erst AB dem Erteilen mit; schon erfasste bleiben auch nach Entzug in der
+  Datenbank durchsuchbar.
+- Neu: Unter „Berechtigungen“ lassen sich die zugehörigen Daten gezielt löschen –
+  „Datei-Index löschen“ und „Erfasste Benachrichtigungen löschen“, jeweils mit
+  Sicherheitsabfrage. (Kontakte/Termine werden live abgefragt, nichts gespeichert.)
+
+## 0.45
+- Neu: Erinnerung, wenn eine einmal erteilte Berechtigung fehlt (Alle Dateien,
+  Benachrichtigungszugriff, Kontakte, Termine) – z. B. nach einem System-Update.
+  Die Meldung führt direkt zum Erteilen und lässt sich „Ignorieren“.
+- Neu/aufgeräumt: Ein aufklappbarer Abschnitt „Berechtigungen“ in den
+  Einstellungen (Dreieck ▸/▾) zeigt je Berechtigung Status und wofür sie
+  gebraucht wird; ein Tipp führt in die passende Systemeinstellung. Ersetzt die
+  früheren, verstreuten Einzel-Hinweise (keine doppelten Einstellungen).
+
+## 0.44
+- Verbessert: Das Diagnose-Protokoll steht jetzt ganz unten in den
+  Einstellungen, zeigt die neuesten Einträge zuerst, und alle Schaltflächen
+  (Anzeigen-Schalter, „Protokoll löschen“) stehen darüber. Neuer Schalter
+  „Protokoll anzeigen“ blendet das Protokoll bei Bedarf ganz aus.
+
+## 0.43
+- Neu: OpenOffice-/LibreOffice-Dokumente (ODT/ODS/ODP) werden jetzt gelesen –
+  Titel/Autor und der Volltext, genau wie bei den Word-/Excel-Formaten.
+- Neu: Archive durchsuchbar (neuer Schalter in den Einstellungen, Standard AUS,
+  weil teuer). Ist er an, umfasst der Volltext eines Archivs auch die Texte der
+  Dokumente darin – so findest du ein Archiv über seinen Inhalt. Unterstützt:
+  ZIP, 7z, TAR (auch .gz/.bz2/.xz) und einzeln komprimierte Dateien (z. B.
+  bericht.pdf.gz). RAR wird nur dem Namen nach gefunden – es gibt keinen freien,
+  GPL-kompatiblen RAR-Entpacker; RAR-Inhalte findest du, indem du das Archiv
+  einmal als ZIP oder 7z neu packst. Nur in Ordnern mit „Inhalt
+  durchsuchbar“; verschachtelte Archive werden nicht rekursiv ausgepackt.
+- Verbessert: Die Endungs-Vorschläge der erweiterten Suche kennen jetzt auch
+  Musikformate (ogg, opus, wav, aac, wma …), Videoformate und die Archivtypen;
+  neue Kategorie „Archive“.
+
+## 0.40
+- Neu: In der MOBI-Vorschau wird jetzt das Titelbild (Cover) ganz am Anfang
+  angezeigt, falls das Buch eines enthält – vor dem Text.
+
+## 0.39
+- Behoben (kritisch): Nach dem 0.37-Umbau lief die Suche in einem einzelnen
+  Hintergrund-Thread ohne Trefferbegrenzung. Eine sehr häufige Suche (z. B.
+  „sex") band diesen Thread dauerhaft und blockierte danach *jede* weitere
+  Suche – es kamen gar keine Ergebnisse mehr. Die Suche ist jetzt auf die
+  ersten 500 Treffer begrenzt (mit Hinweis, wenn mehr vorhanden sind) und
+  veraltete Anfragen werden früh verworfen.
+- Verbessert: Die Vorschlagsliste der Dateiendungen (erweiterte Suche) ist
+  jetzt nach Kategorien gruppiert (E-Books, Dokumente, Tabellen, Präsentationen,
+  Comics, Bilder, Audio, Video, Web & Daten), innerhalb jeder Kategorie
+  alphabetisch, jeweils mit kurzer Klartext-Erklärung.
+
+## 0.38
+- Behoben: In MOBI-Texten konnte an den internen Record-Grenzen (etwa alle
+  4 KB) ein Wort verstümmelt werden mit ein paar Müllzeichen (z. B. „Neigung" →
+  „Neig�ung"). Jeder Textabschnitt wird jetzt korrekt auf seine deklarierte
+  Größe begrenzt.
+
+## 0.37
+- Behoben: Die App konnte beim Tippen einer häufigen Suche (z. B. „sex" mit
+  zehntausenden Volltext-Treffern) einfrieren/„reagiert nicht" melden (ANR). Die
+  Suche läuft jetzt im Hintergrund; die Oberfläche bleibt bedienbar, während
+  „Suche läuft …" angezeigt wird. Veraltete Anfragen (beim Weitertippen) werden
+  verworfen.
+
+## 0.36
+- Behoben: MOBI-Texte hatten falsche Sonderzeichen (Mojibake: „ü" wurde zu
+  „Ã¼", „©" zu „Â©") – im Volltext-Index und in der Vorschau. Der Text wird
+  jetzt mit dem im MOBI deklarierten Zeichensatz dekodiert (UTF-8 bzw.
+  Windows-1252) statt fest als Latin-1.
+- Behoben: MOBI-Titelbilder erschienen nie. Die Cover-Erkennung verließ sich auf
+  ein MOBI-Kopf-Feld, das in vielen Dateien 0/unzuverlässig ist; jetzt wird der
+  erste eingebettete Bild-Record gesucht (mit Fallback). MOBIs, die ein Cover
+  enthalten, bekommen nun ein Titelbild (Dateien ohne eingebettetes Cover
+  natürlich weiterhin nicht).
+- Neu: Suche nach Dateiendung erweitert. In der erweiterten Suche unter
+  „Dateiart" gibt es jetzt (a) eine freie Eingabe für beliebige Endungen (auch
+  solche, die noch nicht im Index sind) und (b) eine Vorschlagsliste mit
+  Klartext-Erklärung (epub = E-Book, txt = Textdokument, cbz = Comic-Archiv …).
+  Mehrere Endungen lassen sich gleichzeitig auswählen (per UND mit den übrigen
+  Suchfeldern kombiniert). Die bisherige Liste der tatsächlich vorhandenen
+  Endungen bleibt als Überblick erhalten.
+
+## 0.35
+- Intern: Die Format-Extraktoren (PDF/EPUB/MOBI/AZW3/CBZ/altes Office → Text,
+  Titel/Autor/Serie, Titelbilder) kommen jetzt aus der gemeinsamen Bibliothek
+  herbers-android-docextract (Git-Submodul, de.herbers.docextract) statt aus
+  eigenen Kopien – eine gepflegte Quelle, andere können sie ebenfalls nutzen.
+  Der „Vorschaubilder dauerhaft speichern"-Schalter bleibt unverändert (der
+  Ablageort wird der Bibliothek jetzt gesetzt). Keine sichtbare Änderung.
+
+## 0.34
+- Intern: Das Diagnose-Protokoll und die neue Stapel-Erfassung bei Hängern
+  kommen jetzt aus der gemeinsamen Bibliothek herbers-android-common
+  (de.herbers.common.DiagLog / Diagnostics) statt aus eigenem Code – dieselbe
+  Diagnose wie künftig in EdgeTab und ActiveFrames.
+- Neu: Unerwartete Abstürze werden mit vollem Stack ins Diagnose-Protokoll
+  geschrieben (Absturz-Logger), damit sich auch seltene Fehler nachvollziehen
+  lassen. Keine sichtbare Änderung im normalen Betrieb.
+
+## 0.33
+- Behoben: Der Indizierer konnte dauerhaft hängenbleiben und markierte dabei
+  eine zufällige, unschuldige Datei als „problematisch" (was nichts half – beim
+  nächsten Lauf hing es wieder). Ursache: Beim Aufräumen verwaister Einträge
+  galten unveränderte Dateien fälschlich als gelöscht, was ein extrem teures
+  Volltext-Massenlöschen auslöste (nur der Not-Abbruch nach 5 Minuten bewahrte
+  den Index vorm Leeren). Unveränderte Dateien werden jetzt korrekt als „in
+  diesem Lauf gesehen" markiert; das Aufräumen betrifft nur noch tatsächlich
+  entfernte Dateien und läuft in Sekunden. Eine evtl. zuvor fälschlich als
+  „problematisch" gelistete Datei kannst du über das ✕ wieder freigeben.
+- Neu (Diagnose): Bleibt der Indizierer ohne Fortschritt stehen, hält das
+  Diagnose-Protokoll jetzt den genauen Stapel (Stack) der hängenden Stelle
+  fest – so ist die Ursache künftig sofort erkennbar.
+
+## 0.32
+- Intern: Die Aufzählung wählbarer Benachrichtigungsquellen (alle startbaren
+  Apps) kommt jetzt aus der gemeinsamen Bibliothek herbers-android-common
+  (de.herbers.common.Apps) statt aus eigenem Code – dieselbe Logik wie in
+  EdgeTab. Keine sichtbare Änderung.
+
+## 0.31
+- Intern: Das Mitschneiden der Benachrichtigungen (Titel/Text-Auslesen inkl.
+  BigText, Gruppen-/Leer-Filter, App-Name) nutzt jetzt den gemeinsamen Kern der
+  Bibliothek herbers-android-common (de.herbers.common.Notifications) statt
+  eigener Kopien – dieselbe, gepflegte Logik wie in EdgeTab. Keine sichtbare
+  Änderung.
+
 ## 0.30
 - Wiederherstellen der Einstellungen war defekt und funktioniert jetzt: Die
   Sicherung nutzt die gemeinsame Bibliothek herbers-android-common (Git-Submodul,
