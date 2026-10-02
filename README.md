@@ -3,8 +3,18 @@
 A standalone Android device-search app: full-text search across files
 (TXT/MD, Office DOCX/XLSX/PPTX and legacy DOC/XLS/PPT, OpenDocument
 ODT/ODS/ODP, PDF, EPUB/FB2, MOBI/AZW3, and optionally the contents of
-ZIP/7z/TAR archives), plus contacts, calendar events, SMS and the call log,
-in one search field.
+ZIP/7z/TAR archives), plus contacts, calendar events, SMS, the call log
+**and captured system notifications** — all in one search field.
+
+**Capture & search your notifications (per-app, opt-in).** Sucher can record
+incoming system notifications and keep them **searchable losslessly — even
+after you've swiped them away**. That means you can still find, days later, a
+parcel tracking number, a 2FA/verification code, an order confirmation or any
+short message that would otherwise be gone. You decide **per app** whose
+notifications are captured; the full text (not just the one line) is stored, so
+every field stays searchable and can be evaluated later. Already-captured
+notifications remain searchable even if you revoke notification access, and can
+be deleted anytime. (Opt-in via Android's notification access.)
 
 Split off from [EdgeTab](../../EdgeTab/) on 2026-09-24, where it started as
 a tab before turning out to deserve its own app (different permission
@@ -39,9 +49,9 @@ narrowed down step by step instead of building one giant combined query.
 
 | Format | Method | Notes |
 |---|---|---|
-| TXT/MD/CSV/JSON/XML/etc. | direct read | |
+| Plain text: TXT, MD/Markdown, CSV, LOG, JSON, XML, SRT, INI, YAML/YML | direct read | |
 | DOCX/XLSX/PPTX | ZIP+XML via Android's built-in `XmlPullParser` | no Apache POI needed |
-| ODT/ODS/ODP (OpenDocument) | same (meta.xml + content.xml) | LibreOffice/OpenOffice |
+| OpenDocument ODT/ODS/ODP/ODG/ODF + templates OTT/OTS/OTP | same (meta.xml + content.xml) | LibreOffice/OpenOffice |
 | EPUB/FB2 | same | |
 | PDF | PDFBox-Android | encrypted PDFs: filename only, not decrypted |
 | DOC/XLS/PPT (legacy) | Apache POI (`poi`+`poi-scratchpad` only, no `poi-ooxml`) | |
@@ -55,9 +65,10 @@ search covers everything, not just the table above.
 
 Besides files, Sucher also searches **contacts, calendar events, SMS and the
 call log** (each a separate result category, queried live — nothing stored),
-and **captured notifications** (opt-in via notification access; already-captured
-ones stay searchable even after the permission is revoked, and can be deleted
-under "Permissions"). Each captured notification is stored **losslessly** —
+and **captured notifications** (opt-in via notification access, **enabled per
+app**; already-captured ones stay searchable even after the permission is
+revoked, and can be deleted under "Permissions"). Each captured notification is
+stored **losslessly** —
 every field it carried, via the shared library's `Notifications.toJson`, not
 just title and one line — so the full text is searchable and any field can be
 evaluated later. SMS and call log need their own permissions, granted on
