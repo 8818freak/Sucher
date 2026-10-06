@@ -169,7 +169,7 @@ public class PreviewActivity extends Activity {
     }
 
     private View errorView() {
-        return message("Vorschau nicht möglich.");
+        return message(getString(R.string.prev_not_possible));
     }
 
     private View message(String text) {
@@ -197,7 +197,7 @@ public class PreviewActivity extends Activity {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(i);
         } catch (Exception e) {
-            Toast.makeText(this, "Konnte nicht geöffnet werden.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.ui_konnte_nicht_geoffnet_werden), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -252,7 +252,7 @@ public class PreviewActivity extends Activity {
 
     private View pdfPager(File f) {
         int count = PdfExtractorHelper.pageCount(f);
-        if (count <= 0) return message("PDF kann nicht angezeigt werden (kopiergeschützt oder beschädigt).");
+        if (count <= 0) return message(getString(R.string.prev_pdf_fail));
         return new PagerView(this, new PagerView.PageSource() {
             @Override public int count() { return count; }
             @Override public Bitmap load(int index) { return PdfExtractorHelper.renderPage(f, index, 1.3f); }
@@ -263,7 +263,7 @@ public class PreviewActivity extends Activity {
 
     private View comicPager(File f) {
         List<String> pages = ComicExtractor.cbzPageNames(f);
-        if (pages.isEmpty()) return message("Keine Bildseiten in diesem Comic gefunden.");
+        if (pages.isEmpty()) return message(getString(R.string.prev_no_comic_pages));
         return new PagerView(this, new PagerView.PageSource() {
             @Override public int count() { return pages.size(); }
             @Override public Bitmap load(int index) {
@@ -288,7 +288,7 @@ public class PreviewActivity extends Activity {
     }
 
     private View epubReader(EpubBook book) {
-        if (book == null || book.spine.isEmpty()) return message("Dieses E-Book konnte nicht geöffnet werden.");
+        if (book == null || book.spine.isEmpty()) return message(getString(R.string.prev_ebook_fail));
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -349,7 +349,7 @@ public class PreviewActivity extends Activity {
         nav.setBackgroundColor(Color.parseColor("#2C2C2E"));
 
         Button prev = new Button(this);
-        prev.setText("‹ Kapitel");
+        prev.setText(getString(R.string.ui_kapitel));
         nav.addView(prev);
 
         TextView label = new TextView(this);
@@ -360,7 +360,7 @@ public class PreviewActivity extends Activity {
         nav.addView(label);
 
         Button next = new Button(this);
-        next.setText("Kapitel ›");
+        next.setText(getString(R.string.ui_kapitel_2));
         nav.addView(next);
 
         prev.setOnClickListener(v -> {
@@ -516,8 +516,8 @@ public class PreviewActivity extends Activity {
     // ---------- MOBI/AZW3 ----------
 
     private View mobiReader(MobiExtractor.PreviewResult pr) {
-        if (pr.drm) return message("Kopiergeschütztes E-Book – keine Vorschau möglich.");
-        if (pr.unsupportedCompression) return message("Dieses E-Book nutzt ein Kompressionsverfahren, das (noch) nicht unterstützt wird.");
+        if (pr.drm) return message(getString(R.string.prev_ebook_drm));
+        if (pr.unsupportedCompression) return message(getString(R.string.prev_ebook_compression));
         if (pr.html == null || pr.html.trim().isEmpty()) return message("Kein Inhalt gefunden.");
 
         if (!pr.kf8) {
@@ -541,7 +541,7 @@ public class PreviewActivity extends Activity {
         ImageView coverView = coverImageView(pr.cover);
         if (coverView != null) box.addView(coverView);
         TextView note = new TextView(this);
-        note.setText("Dieses Format (AZW3/KF8) zeigt hier nur reinen Text, ohne Kapitel-Formatierung.");
+        note.setText(getString(R.string.ui_dieses_format_azw3_kf8_zeigt));
         note.setTextColor(Color.parseColor("#8899AA"));
         note.setTextSize(11);
         note.setPadding(dp(14), dp(10), dp(14), dp(4));
@@ -608,16 +608,14 @@ public class PreviewActivity extends Activity {
         }
 
         TextView note = new TextView(this);
-        note.setText("Für Office-Dokumente gibt es keine Seiten-Vorschau (das würde Word/Excel/"
-                + "PowerPoints eigene Layout-Engine nachbauen) – nur das oben gezeigte Deckblatt, "
-                + "falls die Datei eins gespeichert hat.");
+        note.setText(getString(R.string.msg_fur_office_dokumente_gibt_es));
         note.setTextColor(Color.parseColor("#8899AA"));
         note.setTextSize(13);
         note.setGravity(Gravity.CENTER);
         note.setPadding(0, 0, 0, dp(16));
         box.addView(note);
 
-        box.addView(openButton("In zuständiger App öffnen"));
+        box.addView(openButton(getString(R.string.open_in_app)));
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(box);
@@ -634,9 +632,9 @@ public class PreviewActivity extends Activity {
                 int n = in.read(buf);
                 text = new String(buf, 0, Math.max(0, n), StandardCharsets.UTF_8);
             }
-            if (f.length() > buf.length) text += "\n\n… (gekürzt)";
+            if (f.length() > buf.length) text += getString(R.string.truncated_suffix);
         } catch (Exception e) {
-            text = "Konnte nicht gelesen werden.";
+            text = getString(R.string.prev_read_failed);
         }
         return scrollableText(text);
     }
@@ -658,13 +656,13 @@ public class PreviewActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
         TextView t = new TextView(this);
-        t.setText("Keine Vorschau für dieses Dateiformat verfügbar.");
+        t.setText(getString(R.string.ui_keine_vorschau_fur_dieses_da));
         t.setTextColor(Color.parseColor("#8899AA"));
         t.setTextSize(14);
         t.setGravity(Gravity.CENTER);
         t.setPadding(dp(20), 0, dp(20), dp(16));
         box.addView(t);
-        box.addView(openButton("In zuständiger App öffnen"));
+        box.addView(openButton(getString(R.string.open_in_app)));
         return box;
     }
 }

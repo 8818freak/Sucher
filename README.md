@@ -1,3 +1,5 @@
+> 🇬🇧 **English:** README.md *(this page)* · 🇩🇪 **Deutsch:** [README.de.md](README.de.md)
+
 # Sucher
 
 A standalone Android device-search app: full-text search across files
@@ -36,12 +38,12 @@ narrowed down step by step instead of building one giant combined query.
 
 <table>
 <tr>
-<td><img src="screenshots/suche.png" width="220" alt="Sucher-Startbildschirm"><br>Suche</td>
-<td><img src="screenshots/ergebnisse.png" width="220" alt="Dateisuche mit Volltext-Treffern"><br>Volltext-Treffer</td>
-<td><img src="screenshots/erweiterte-suche.png" width="220" alt="Erweiterte Suche: Autor/Titel/Buchserie/Dateityp"><br>Erweiterte Suche</td>
+<td><img src="screenshots/en/suche.png" width="220" alt="Sucher-Startbildschirm"><br>Suche</td>
+<td><img src="screenshots/en/ergebnisse.png" width="220" alt="Dateisuche mit Volltext-Treffern"><br>Volltext-Treffer</td>
+<td><img src="screenshots/en/erweiterte-suche.png" width="220" alt="Erweiterte Suche: Autor/Titel/Buchserie/Dateityp"><br>Erweiterte Suche</td>
 </tr>
 <tr>
-<td><img src="screenshots/eingrenzen.png" width="220" alt="Suchergebnisse eingrenzen"><br>Ergebnisse eingrenzen</td>
+<td><img src="screenshots/en/eingrenzen.png" width="220" alt="Suchergebnisse eingrenzen"><br>Ergebnisse eingrenzen</td>
 </tr>
 </table>
 

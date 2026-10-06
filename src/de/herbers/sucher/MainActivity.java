@@ -30,6 +30,8 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+
+import de.herbers.sucher.search.SearchQuery;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -65,6 +67,13 @@ public class MainActivity extends Activity {
     // Ueberlebt einen Programmwechsel (App zu, wieder zurueck) - statische
     // Felder wie EXPANDED oben, nicht an die Activity-Instanz gebunden.
     private static String lastQuery = "";
+
+    // Suchbereich + Optionen der neuen Suchsyntax (Spec §10) - static wie
+    // lastQuery, damit sie einen rebuild()/Programmwechsel ueberleben.
+    private static int searchArea = SearchStore.AREA_ALL;   // Standard: Alles (Name + Inhalt)
+    private static boolean optCaseSensitive = false;         // Groß/klein (Standard aus)
+    private static boolean optCrossParagraph = false;        // Über Absatz (Standard aus)
+    private static boolean optLimitStarRange = true;         // Reichweite begrenzen (Standard an)
     private static String lastOpenedPath = null;
     // Je Suche abwaehlbare Kategorien (Dateien/Kontakte/Termine/Nachrichten) -
     // bewusst nicht in Settings gespeichert, nur fuer die laufende Sitzung
@@ -293,11 +302,21 @@ public class MainActivity extends Activity {
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = new TextView(this);
-        title.setText(showSettings ? "Einstellungen" : "Sucher");
+        title.setText(showSettings ? getString(R.string.settings_title) : "Sucher");
         title.setTextColor(Color.WHITE);
         title.setTextSize(20 * fs);
         title.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         head.addView(title);
+
+        if (!showSettings) {
+            TextView help = new TextView(this);
+            help.setText("❓");
+            help.setTextColor(Color.parseColor("#B0B0B0"));
+            help.setTextSize(18 * fs);
+            help.setPadding(10 * d, 6 * d, 10 * d, 6 * d);
+            help.setOnClickListener(v -> showSearchHelp());
+            head.addView(help);
+        }
 
         TextView gear = new TextView(this);
         gear.setText(showSettings ? "✕" : "⚙");
@@ -323,7 +342,7 @@ public class MainActivity extends Activity {
 
     private void buildSearch(LinearLayout root, int d) {
         EditText field = new EditText(this);
-        field.setHint("Dateien, Kontakte, Termine durchsuchen…");
+        field.setHint(getString(R.string.ui_dateien_kontakte_termine_dur));
         field.setHintTextColor(Color.parseColor("#8899AA"));
         field.setTextColor(Color.WHITE);
         field.setTextSize(15 * fs);
@@ -369,7 +388,7 @@ public class MainActivity extends Activity {
         controls.setGravity(Gravity.CENTER_VERTICAL);
         controls.setPadding(0, 8 * d, 0, 0);
         TextView folderBtn = new TextView(this);
-        folderBtn.setText(scopeFolder == null ? "📁 In Ordner suchen…" : "📁 Ordner ändern…");
+        folderBtn.setText(scopeFolder == null ? getString(R.string.search_in_folder) : getString(R.string.change_folder));
         folderBtn.setTextColor(Color.parseColor("#2E9BE6"));
         folderBtn.setTextSize(13 * fs);
         folderBtn.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -384,13 +403,16 @@ public class MainActivity extends Activity {
         });
         controls.addView(folderBtn);
         TextView newSearch = new TextView(this);
-        newSearch.setText("Neue Suche");
+        newSearch.setText(getString(R.string.ui_neue_suche));
         newSearch.setTextColor(Color.parseColor("#2E9BE6"));
         newSearch.setTextSize(13 * fs);
         newSearch.setPadding(10 * d, 6 * d, 4 * d, 6 * d);
         newSearch.setOnClickListener(v -> resetSearch());
         controls.addView(newSearch);
         root.addView(controls);
+
+        // Suchbereich (Spec §10) + Optionen - betreffen den Datei-Teil der Suche.
+        root.addView(searchAreaRow(d));
 
         if (scopeFolderPicking) root.addView(scopeFolderBrowser(d));
 
@@ -410,7 +432,7 @@ public class MainActivity extends Activity {
         if (scopePaths != null) root.addView(scopeBanner(d));
 
         TextView advToggle = new TextView(this);
-        advToggle.setText(advancedOpen ? "▾ Erweiterte Suche" : "▸ Erweiterte Suche");
+        advToggle.setText((advancedOpen ? "▾ " : "▸ ") + getString(R.string.adv_search));
         advToggle.setTextColor(Color.parseColor("#2E9BE6"));
         advToggle.setTextSize(15 * fs); // groesser - war zu klein zum bequemen Antippen
         advToggle.setPadding(0, 14 * d, 0, 6 * d);
@@ -432,7 +454,7 @@ public class MainActivity extends Activity {
 
         if (hasStoragePermission() && Settings.searchFolders(this).isEmpty()) {
             TextView hint = new TextView(this);
-            hint.setText("Noch keine Ordner zum Durchsuchen gewählt – oben ⚙.");
+            hint.setText(getString(R.string.ui_noch_keine_ordner_zum_durchs));
             hint.setTextColor(Color.parseColor("#8899AA"));
             hint.setTextSize(13 * fs);
             hint.setPadding(0, 8 * d, 0, 0);
@@ -501,7 +523,7 @@ public class MainActivity extends Activity {
         arrow.setPadding(0, 0, 10 * d, 0);
         head.addView(arrow);
         TextView label = new TextView(this);
-        label.setText("🕐 Letzte Suchen (" + history.size() + ")");
+        label.setText(getString(R.string.recent_searches, history.size()));
         label.setTextColor(Color.parseColor("#8899AA"));
         label.setTextSize(12 * fs);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -539,7 +561,7 @@ public class MainActivity extends Activity {
         }
 
         TextView clearAll = new TextView(this);
-        clearAll.setText("Verlauf löschen");
+        clearAll.setText(getString(R.string.ui_verlauf_loschen));
         clearAll.setTextColor(Color.parseColor("#E06666"));
         clearAll.setTextSize(12 * fs);
         clearAll.setPadding(0, 8 * d, 0, 4 * d);
@@ -551,6 +573,76 @@ public class MainActivity extends Activity {
     /** Suche komplett zuruecksetzen (Mathias' Wunsch "Neue Suche"): Feld leeren,
      *  alle Eingrenzungen/erweiterten Felder/Kategorie-Filter/aufgeklappten
      *  Zustaende zuruecksetzen. */
+    /** Suchbereich-Dropdown (Ordner-/Dateiname/Inhalt) + die drei Optionen.
+     *  Checkbox 2+3 (Über Absatz / Reichweite) wirken nur beim Dateiinhalt und
+     *  sind sonst ausgegraut (Spec §10). */
+    private View searchAreaRow(int d) {
+        LinearLayout wrap = new LinearLayout(this);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        wrap.setPadding(0, 6 * d, 0, 0);
+
+        TextView drop = new TextView(this);
+        drop.setText(getString(R.string.search_area_label, areaLabel(searchArea)));
+        drop.setTextColor(Color.parseColor("#2E9BE6"));
+        drop.setTextSize(13 * fs);
+        drop.setPadding(0, 4 * d, 0, 4 * d);
+        drop.setOnClickListener(v -> {
+            android.widget.PopupMenu pm = new android.widget.PopupMenu(this, v);
+            pm.getMenu().add(0, SearchStore.AREA_ALL, 0, getString(R.string.area_all));
+            pm.getMenu().add(0, SearchStore.AREA_FOLDER, 1, getString(R.string.area_folders));
+            pm.getMenu().add(0, SearchStore.AREA_FILE, 2, getString(R.string.area_files));
+            pm.getMenu().add(0, SearchStore.AREA_CONTENT, 3, getString(R.string.area_content));
+            pm.setOnMenuItemClickListener(item -> { searchArea = item.getItemId(); rebuild(); return true; });
+            pm.show();
+        });
+        wrap.addView(drop);
+
+        boolean contentArea = (searchArea == SearchStore.AREA_CONTENT || searchArea == SearchStore.AREA_ALL);
+        wrap.addView(optionCheck(getString(R.string.opt_case), optCaseSensitive, true,
+                c -> { optCaseSensitive = c; rerunSearch(); }, d));
+        wrap.addView(optionCheck(getString(R.string.opt_para), optCrossParagraph, contentArea,
+                c -> { optCrossParagraph = c; rerunSearch(); }, d));
+        wrap.addView(optionCheck(getString(R.string.opt_starrange), optLimitStarRange, contentArea,
+                c -> { optLimitStarRange = c; rerunSearch(); }, d));
+        return wrap;
+    }
+
+    private interface OnBool { void on(boolean b); }
+
+    private CheckBox optionCheck(String label, boolean checked, boolean enabled, OnBool cb, int d) {
+        CheckBox c = new CheckBox(this);
+        c.setText(label);
+        c.setChecked(checked);
+        c.setEnabled(enabled);
+        c.setTextColor(enabled ? Color.parseColor("#C8C8CC") : Color.parseColor("#55585C"));
+        c.setTextSize(12 * fs);
+        c.setOnCheckedChangeListener((v, isC) -> cb.on(isC));
+        return c;
+    }
+
+    private String areaLabel(int area) {
+        switch (area) {
+            case SearchStore.AREA_ALL:     return getString(R.string.area_all);
+            case SearchStore.AREA_FOLDER:  return getString(R.string.area_folders);
+            case SearchStore.AREA_CONTENT: return getString(R.string.area_content);
+            default:                        return getString(R.string.area_files);
+        }
+    }
+
+    private SearchQuery.Options searchOpts() {
+        SearchQuery.Options o = new SearchQuery.Options();
+        o.caseSensitive = optCaseSensitive;
+        o.crossParagraph = optCrossParagraph;
+        o.limitStarRange = optLimitStarRange;
+        return o;
+    }
+
+    /** Aktuelle Suche mit geaenderten Optionen neu ausfuehren (ohne UI-Neubau). */
+    private void rerunSearch() {
+        if (!lastQuery.isEmpty() && advancedResults != null && !lastSearchWasAdvanced)
+            runSearch(lastQuery, advancedResults, advancedD);
+    }
+
     private void resetSearch() {
         lastQuery = "";
         lastSearchWasAdvanced = false;
@@ -583,9 +675,9 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setPadding(0, 8 * d, 0, 0);
-        String[][] cats = {{"files", "Dateien"}, {"images", "Bilder"}, {"videos", "Videos"},
-                {"music", "Musik"}, {"contacts", "Kontakte"}, {"events", "Termine"},
-                {"sms", "SMS"}, {"calls", "Anrufe"}, {"notifs", "Nachrichten"}};
+        String[][] cats = {{"files", getString(R.string.cat_files)}, {"images", getString(R.string.cat_images)}, {"videos", getString(R.string.cat_videos)},
+                {"music", getString(R.string.cat_music)}, {"contacts", getString(R.string.cat_contacts)}, {"events", getString(R.string.cat_events)},
+                {"sms", getString(R.string.cat_sms)}, {"calls", getString(R.string.cat_calls)}, {"notifs", getString(R.string.cat_notifs)}};
         for (String[] cat : cats) row.addView(chip(cat[0], cat[1], d));
         hsv.addView(row);
         return hsv;
@@ -630,25 +722,25 @@ public class MainActivity extends Activity {
         blp.topMargin = 8 * d;
         box.setLayoutParams(blp);
 
-        box.addView(advField("Dateiname", advName, s -> advName = s, d));
-        box.addView(advField("Autor", advAuthor, s -> advAuthor = s, d));
-        box.addView(advField("Titel", advTitle, s -> advTitle = s, d));
-        box.addView(advField("Buchserie", advSeries, s -> advSeries = s, d));
+        box.addView(advField(getString(R.string.adv_name), advName, s -> advName = s, d));
+        box.addView(advField(getString(R.string.adv_author), advAuthor, s -> advAuthor = s, d));
+        box.addView(advField(getString(R.string.adv_title), advTitle, s -> advTitle = s, d));
+        box.addView(advField(getString(R.string.adv_series), advSeries, s -> advSeries = s, d));
 
         box.addView(extPicker(d));
 
-        box.addView(advDateRange("Erstellt", advCreatedFrom, advCreatedTo,
+        box.addView(advDateRange(getString(R.string.date_created), advCreatedFrom, advCreatedTo,
                 (from, to) -> { advCreatedFrom = from; advCreatedTo = to; }, d));
-        box.addView(advDateRange("Geändert", advModifiedFrom, advModifiedTo,
+        box.addView(advDateRange(getString(R.string.date_modified), advModifiedFrom, advModifiedTo,
                 (from, to) -> { advModifiedFrom = from; advModifiedTo = to; }, d));
 
         Button go = new Button(this);
-        go.setText("Suchen");
+        go.setText(getString(R.string.ui_suchen));
         go.setOnClickListener(v -> runAdvancedSearch());
         box.addView(go);
 
         Button reset = new Button(this);
-        reset.setText("Zurücksetzen");
+        reset.setText(getString(R.string.ui_zurucksetzen));
         reset.setOnClickListener(v -> {
             advName = advAuthor = advTitle = advSeries = "";
             advExts.clear();
@@ -685,8 +777,8 @@ public class MainActivity extends Activity {
         head.addView(arrow);
 
         TextView label = new TextView(this);
-        String summary = advExts.isEmpty() ? "Dateiart: alle"
-                : "Dateiart: " + advExts.size() + " ausgewählt (" + String.join(", ", advExts) + ")";
+        String summary = advExts.isEmpty() ? getString(R.string.filetype_all)
+                : getString(R.string.filetype_selected, advExts.size(), String.join(", ", advExts));
         label.setText(summary);
         label.setTextColor(Color.parseColor("#8899AA"));
         label.setTextSize(12 * fs);
@@ -706,7 +798,7 @@ public class MainActivity extends Activity {
             manualRow.setGravity(Gravity.CENTER_VERTICAL);
             manualRow.setPadding(0, 4 * d, 0, 4 * d);
             EditText in = new EditText(this);
-            in.setHint("Eigene Endung(en), z. B. epub pdf");
+            in.setHint(getString(R.string.ui_eigene_endung_en_z_b_epub_pd));
             in.setHintTextColor(Color.parseColor("#6E6E73"));
             in.setTextColor(Color.WHITE);
             in.setTextSize(13 * fs);
@@ -714,7 +806,7 @@ public class MainActivity extends Activity {
             in.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             manualRow.addView(in);
             TextView addBtn = new TextView(this);
-            addBtn.setText("+ Hinzufügen");
+            addBtn.setText(getString(R.string.msg_hinzufugen));
             addBtn.setTextColor(Color.WHITE);
             addBtn.setTextSize(13 * fs);
             addBtn.setPadding(12 * d, 8 * d, 12 * d, 8 * d);
@@ -729,12 +821,12 @@ public class MainActivity extends Activity {
             // (2) Vorschlagsliste mit Klartext-Erklaerung, antippen zum
             //     An-/Abwaehlen (mehrere gleichzeitig moeglich).
             TextView sugHead = new TextView(this);
-            sugHead.setText("Vorschläge (antippen):");
+            sugHead.setText(getString(R.string.ui_vorschlage_antippen));
             sugHead.setTextColor(Color.parseColor("#6E6E73"));
             sugHead.setTextSize(11 * fs);
             sugHead.setPadding(0, 10 * d, 0, 2 * d);
             wrap.addView(sugHead);
-            for (java.util.Map.Entry<String, String[][]> catE : EXT_CATS.entrySet()) {
+            for (java.util.Map.Entry<String, String[][]> catE : extCats().entrySet()) {
                 TextView catHead = new TextView(this);
                 catHead.setText(catE.getKey());
                 catHead.setTextColor(Color.parseColor("#7FB0D0"));
@@ -767,7 +859,7 @@ public class MainActivity extends Activity {
             java.util.List<String> present = SearchStore.get(this).distinctExts();
             if (!present.isEmpty()) {
                 TextView presHead = new TextView(this);
-                presHead.setText("In deinem Index vorhanden:");
+                presHead.setText(getString(R.string.ui_in_deinem_index_vorhanden));
                 presHead.setTextColor(Color.parseColor("#6E6E73"));
                 presHead.setTextSize(11 * fs);
                 presHead.setPadding(0, 12 * d, 0, 2 * d);
@@ -818,18 +910,19 @@ public class MainActivity extends Activity {
 
     /** Bekannte Dateiendungen nach Kategorie (mit Kurzerklaerung), innerhalb je
      *  Kategorie alphabetisch - fuer die Vorschlagsliste der erweiterten Suche. */
-    private static final java.util.LinkedHashMap<String, String[][]> EXT_CATS = new java.util.LinkedHashMap<>();
-    static {
-        EXT_CATS.put("E-Books", new String[][]{{"azw","Kindle-Buch (AZW)"},{"azw3","Kindle-Buch (AZW3)"},{"epub","E-Book (EPUB)"},{"fb2","E-Book (FictionBook)"},{"mobi","Kindle-Buch (MOBI)"}});
-        EXT_CATS.put("Dokumente", new String[][]{{"doc","Word-Dokument (älter)"},{"docx","Word-Dokument"},{"md","Markdown-Text"},{"odt","LibreOffice-Text (ODT)"},{"pdf","PDF-Dokument"},{"rtf","Rich-Text-Dokument"},{"txt","Textdokument"}});
-        EXT_CATS.put("Tabellen", new String[][]{{"csv","Tabelle (CSV)"},{"ods","LibreOffice-Tabelle (ODS)"},{"xls","Excel-Tabelle (älter)"},{"xlsx","Excel-Tabelle"}});
-        EXT_CATS.put("Präsentationen", new String[][]{{"odp","LibreOffice-Präsentation (ODP)"},{"ppt","PowerPoint (älter)"},{"pptx","PowerPoint-Präsentation"}});
-        EXT_CATS.put("Comics", new String[][]{{"cbr","Comic-Archiv (CBR/RAR)"},{"cbz","Comic-Archiv (CBZ/ZIP)"}});
-        EXT_CATS.put("Bilder", new String[][]{{"bmp","Bild (BMP)"},{"gif","Bild (GIF)"},{"jpg","Bild (JPEG)"},{"png","Bild (PNG)"},{"webp","Bild (WebP)"}});
-        EXT_CATS.put("Audio", new String[][]{{"aac","Audio (AAC)"},{"flac","Audio (FLAC)"},{"m4a","Audio (M4A)"},{"mp3","Audio (MP3)"},{"ogg","Audio (OGG Vorbis)"},{"opus","Audio (Opus)"},{"wav","Audio (WAV)"},{"wma","Audio (WMA)"}});
-        EXT_CATS.put("Video", new String[][]{{"avi","Video (AVI)"},{"mkv","Video (MKV)"},{"mov","Video (QuickTime)"},{"mp4","Video (MP4)"},{"webm","Video (WebM)"}});
-        EXT_CATS.put("Archive", new String[][]{{"7z","Archiv (7-Zip)"},{"bz2","Bzip2-Datei / TAR.BZ2"},{"gz","Gzip-Datei / TAR.GZ"},{"rar","Archiv (RAR, nur Name)"},{"tar","Archiv (TAR)"},{"tgz","Archiv (TAR.GZ)"},{"xz","XZ-Datei / TAR.XZ"},{"zip","Archiv (ZIP)"}});
-        EXT_CATS.put("Web & Daten", new String[][]{{"html","Webseite (HTML)"},{"json","JSON-Datei"},{"xml","XML-Datei"}});
+    private java.util.LinkedHashMap<String, String[][]> extCats() {
+        java.util.LinkedHashMap<String, String[][]> m = new java.util.LinkedHashMap<>();
+        m.put(getString(R.string.extcat_e_books), new String[][]{{"azw", getString(R.string.extlbl_azw)}, {"azw3", getString(R.string.extlbl_azw3)}, {"epub", getString(R.string.extlbl_epub)}, {"fb2", getString(R.string.extlbl_fb2)}, {"mobi", getString(R.string.extlbl_mobi)}});
+        m.put(getString(R.string.extcat_dokumente), new String[][]{{"doc", getString(R.string.extlbl_doc)}, {"docx", getString(R.string.extlbl_docx)}, {"md", getString(R.string.extlbl_md)}, {"odt", getString(R.string.extlbl_odt)}, {"pdf", getString(R.string.extlbl_pdf)}, {"rtf", getString(R.string.extlbl_rtf)}, {"txt", getString(R.string.extlbl_txt)}});
+        m.put(getString(R.string.extcat_tabellen), new String[][]{{"csv", getString(R.string.extlbl_csv)}, {"ods", getString(R.string.extlbl_ods)}, {"xls", getString(R.string.extlbl_xls)}, {"xlsx", getString(R.string.extlbl_xlsx)}});
+        m.put(getString(R.string.extcat_prasentationen), new String[][]{{"odp", getString(R.string.extlbl_odp)}, {"ppt", getString(R.string.extlbl_ppt)}, {"pptx", getString(R.string.extlbl_pptx)}});
+        m.put(getString(R.string.extcat_comics), new String[][]{{"cbr", getString(R.string.extlbl_cbr)}, {"cbz", getString(R.string.extlbl_cbz)}});
+        m.put(getString(R.string.extcat_bilder), new String[][]{{"bmp", getString(R.string.extlbl_bmp)}, {"gif", getString(R.string.extlbl_gif)}, {"jpg", getString(R.string.extlbl_jpg)}, {"png", getString(R.string.extlbl_png)}, {"webp", getString(R.string.extlbl_webp)}});
+        m.put(getString(R.string.extcat_audio), new String[][]{{"aac", getString(R.string.extlbl_aac)}, {"flac", getString(R.string.extlbl_flac)}, {"m4a", getString(R.string.extlbl_m4a)}, {"mp3", getString(R.string.extlbl_mp3)}, {"ogg", getString(R.string.extlbl_ogg)}, {"opus", getString(R.string.extlbl_opus)}, {"wav", getString(R.string.extlbl_wav)}, {"wma", getString(R.string.extlbl_wma)}});
+        m.put(getString(R.string.extcat_video), new String[][]{{"avi", getString(R.string.extlbl_avi)}, {"mkv", getString(R.string.extlbl_mkv)}, {"mov", getString(R.string.extlbl_mov)}, {"mp4", getString(R.string.extlbl_mp4)}, {"webm", getString(R.string.extlbl_webm)}});
+        m.put(getString(R.string.extcat_archive), new String[][]{{"7z", getString(R.string.extlbl_7z)}, {"bz2", getString(R.string.extlbl_bz2)}, {"gz", getString(R.string.extlbl_gz)}, {"rar", getString(R.string.extlbl_rar)}, {"tar", getString(R.string.extlbl_tar)}, {"tgz", getString(R.string.extlbl_tgz)}, {"xz", getString(R.string.extlbl_xz)}, {"zip", getString(R.string.extlbl_zip)}});
+        m.put(getString(R.string.extcat_web_daten), new String[][]{{"html", getString(R.string.extlbl_html)}, {"json", getString(R.string.extlbl_json)}, {"xml", getString(R.string.extlbl_xml)}});
+        return m;
     }
 
     private interface TextSink { void set(String s); }
@@ -863,11 +956,11 @@ public class MainActivity extends Activity {
         l.setTextSize(12 * fs);
         row.addView(l);
         Button fromBtn = new Button(this);
-        fromBtn.setText(from > 0 ? DateUtils.formatDateTime(this, from, DateUtils.FORMAT_SHOW_DATE) : "von");
+        fromBtn.setText(from > 0 ? DateUtils.formatDateTime(this, from, DateUtils.FORMAT_SHOW_DATE) : getString(R.string.date_from));
         fromBtn.setOnClickListener(v -> pickDate(from, d2 -> { sink.set(d2, to); rebuild(); }));
         row.addView(fromBtn);
         Button toBtn = new Button(this);
-        toBtn.setText(to > 0 ? DateUtils.formatDateTime(this, to, DateUtils.FORMAT_SHOW_DATE) : "bis");
+        toBtn.setText(to > 0 ? DateUtils.formatDateTime(this, to, DateUtils.FORMAT_SHOW_DATE) : getString(R.string.date_to));
         toBtn.setOnClickListener(v -> pickDate(to, d2 -> { sink.set(from, d2); rebuild(); }));
         row.addView(toBtn);
         if (from > 0 || to > 0) {
@@ -906,10 +999,11 @@ public class MainActivity extends Activity {
         long modifiedTo = advModifiedTo > 0 ? advModifiedTo + DateUtils.DAY_IN_MILLIS - 1 : 0;
         List<SearchStore.FileHit> files = SearchStore.get(this).advancedSearch(
                 advName, advAuthor, advTitle, advSeries, advExts,
-                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, -1, scopePaths, scopeFolder);
+                advCreatedFrom, createdTo, advModifiedFrom, modifiedTo, -1, scopePaths, scopeFolder,
+                searchOpts());
         if (files.isEmpty()) {
             TextView none = new TextView(this);
-            none.setText("Keine Treffer.");
+            none.setText(getString(R.string.ui_keine_treffer));
             none.setTextColor(Color.parseColor("#8899AA"));
             none.setTextSize(13 * fs);
             results.addView(none);
@@ -928,7 +1022,7 @@ public class MainActivity extends Activity {
      *  Treffer, unabhaengig davon ob per einfacher oder erweiterter Suche. */
     private View narrowRow(List<SearchStore.FileHit> files, int d) {
         TextView t = new TextView(this);
-        t.setText("🔎 Nur in diesen " + files.size() + " Treffern weitersuchen");
+        t.setText(getString(R.string.narrow_further, files.size()));
         t.setTextColor(Color.parseColor("#2E9BE6"));
         t.setTextSize(13 * fs);
         t.setPadding(4 * d, 6 * d, 4 * d, 16 * d);
@@ -958,14 +1052,14 @@ public class MainActivity extends Activity {
         row.setLayoutParams(lp);
 
         TextView label = new TextView(this);
-        label.setText("🔎 Eingegrenzt auf " + scopePaths.size() + " Treffer");
+        label.setText(getString(R.string.narrowed_to, scopePaths.size()));
         label.setTextColor(Color.parseColor("#8ecbff"));
         label.setTextSize(12.5f * fs);
         label.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(label);
 
         TextView clear = new TextView(this);
-        clear.setText("Aufheben ✕");
+        clear.setText(getString(R.string.ui_aufheben));
         clear.setTextColor(Color.parseColor("#2E9BE6"));
         clear.setTextSize(12.5f * fs);
         clear.setPadding(12 * d, 0, 0, 0);
@@ -994,7 +1088,7 @@ public class MainActivity extends Activity {
         int slash = nm.replaceAll("/$", "").lastIndexOf('/');
         String shortNm = slash >= 0 ? nm.substring(slash + 1) : nm;
         TextView label = new TextView(this);
-        label.setText("📁 Nur in " + shortNm + " (mit Unterordnern)");
+        label.setText(getString(R.string.only_in_folder, shortNm));
         label.setTextColor(Color.parseColor("#8ecbff"));
         label.setTextSize(12.5f * fs);
         label.setSingleLine(true);
@@ -1003,7 +1097,7 @@ public class MainActivity extends Activity {
         row.addView(label);
 
         TextView clear = new TextView(this);
-        clear.setText("Aufheben ✕");
+        clear.setText(getString(R.string.ui_aufheben));
         clear.setTextColor(Color.parseColor("#2E9BE6"));
         clear.setTextSize(12.5f * fs);
         clear.setPadding(12 * d, 0, 0, 0);
@@ -1035,7 +1129,7 @@ public class MainActivity extends Activity {
         box.addView(path);
 
         Button choose = new Button(this);
-        choose.setText("In diesem Ordner suchen");
+        choose.setText(getString(R.string.ui_in_diesem_ordner_suchen));
         choose.setOnClickListener(v -> {
             scopeFolder = scopeBrowsePath;
             scopeFolderPicking = false;
@@ -1047,7 +1141,7 @@ public class MainActivity extends Activity {
         java.io.File parent = dir.getParentFile();
         if (parent != null) {
             TextView up = new TextView(this);
-            up.setText("⬆ .. (nach oben)");
+            up.setText(getString(R.string.ui_nach_oben));
             up.setTextColor(Color.parseColor("#B0B0B5"));
             up.setTextSize(13 * fs);
             up.setPadding(0, 6 * d, 0, 6 * d);
@@ -1071,7 +1165,7 @@ public class MainActivity extends Activity {
         }
 
         Button cancel = new Button(this);
-        cancel.setText("Abbrechen");
+        cancel.setText(getString(R.string.ui_abbrechen));
         cancel.setOnClickListener(v -> { scopeFolderPicking = false; rebuild(); });
         box.addView(cancel);
         return box;
@@ -1088,10 +1182,18 @@ public class MainActivity extends Activity {
         byCat.put("images", new ArrayList<>());
         byCat.put("videos", new ArrayList<>());
         byCat.put("music", new ArrayList<>());
-        for (SearchStore.FileHit h : files) byCat.get(fileCategory(h.ext)).add(h);
+        List<SearchStore.FileHit> folderHits = new ArrayList<>();
+        for (SearchStore.FileHit h : files) {
+            if (h.isFolder) folderHits.add(h);
+            else byCat.get(fileCategory(h.ext)).add(h);
+        }
+        if (!folderHits.isEmpty()) {
+            results.addView(fileCard(getString(R.string.cat_folders), folderHits, d, highlightHolder, "folders"));
+            results.addView(narrowRow(folderHits, d));
+        }
 
-        String[][] order = {{"files", "Dateien"}, {"images", "Bilder"},
-                {"videos", "Videos"}, {"music", "Musik"}};
+        String[][] order = {{"files", getString(R.string.cat_files)}, {"images", getString(R.string.cat_images)},
+                {"videos", getString(R.string.cat_videos)}, {"music", getString(R.string.cat_music)}};
         for (String[] cat : order) {
             if (EXCLUDED_CATS.contains(cat[0])) continue;
             List<SearchStore.FileHit> list = byCat.get(cat[0]);
@@ -1164,7 +1266,7 @@ public class MainActivity extends Activity {
         if (rest > 0) {
             TextView more = new TextView(this);
             int step = Math.min(FILE_SHOW_STEP, rest);
-            more.setText("Mehr anzeigen (" + step + " von " + rest + " weiteren) ▼");
+            more.setText(getString(R.string.show_more_n, step, rest));
             more.setTextColor(Color.parseColor("#2E9BE6"));
             more.setTextSize(12 * fs);
             more.setPadding(14 * d, 8 * d, 14 * d, 4 * d);
@@ -1176,7 +1278,7 @@ public class MainActivity extends Activity {
         }
         if (shown > PAGE) {
             TextView less = new TextView(this);
-            less.setText("Weniger anzeigen ▲");
+            less.setText(getString(R.string.ui_weniger_anzeigen));
             less.setTextColor(Color.parseColor("#2E9BE6"));
             less.setTextSize(12 * fs);
             less.setPadding(14 * d, 8 * d, 14 * d, 4 * d);
@@ -1193,7 +1295,7 @@ public class MainActivity extends Activity {
         results.removeAllViews();
         if (q == null || q.trim().length() < 2) {
             TextView hint = new TextView(this);
-            hint.setText("Mindestens 2 Zeichen eingeben.");
+            hint.setText(getString(R.string.ui_mindestens_2_zeichen_eingebe));
             hint.setTextColor(Color.parseColor("#8899AA"));
             hint.setTextSize(13 * fs);
             results.addView(hint);
@@ -1204,7 +1306,7 @@ public class MainActivity extends Activity {
         // blockierte >5 s -> ANR (Absturzbericht 2026-09-29). Ergebnis wird auf
         // dem Main-Thread aufgebaut; veraltete (weitergetippte) Anfragen verworfen.
         TextView busy = new TextView(this);
-        busy.setText("Suche läuft …");
+        busy.setText(getString(R.string.ui_suche_lauft));
         busy.setTextColor(Color.parseColor("#8899AA"));
         busy.setTextSize(13 * fs);
         results.addView(busy);
@@ -1217,13 +1319,16 @@ public class MainActivity extends Activity {
                 && EXCLUDED_CATS.contains("videos") && EXCLUDED_CATS.contains("music"));
         final java.util.Collection<String> scopeSnap = scopePaths;
         final String folderSnap = scopeFolder;
+        final int areaSnap = searchArea;
+        final SearchQuery.Options optsSnap = searchOpts();
         SEARCH_EXEC.execute(() -> {
             // Schon ueberholt (weitergetippt)? Dann gar nicht erst die (evtl. teure)
             // Abfrage starten - sonst staut sich der Single-Thread mit veralteten
             // Suchen zu und blockiert die aktuelle.
             if (!query.equals(lastQuery)) return;
             final List<SearchStore.FileHit> files = (storage && anyFileCat)
-                    ? SearchStore.get(this).search(query, SEARCH_LIMIT, scopeSnap, folderSnap) : new ArrayList<>();
+                    ? SearchStore.get(this).searchEngine(query, areaSnap, optsSnap, SEARCH_LIMIT, scopeSnap, folderSnap)
+                    : new ArrayList<>();
             final List<ContactHit> contacts = EXCLUDED_CATS.contains("contacts") ? new ArrayList<>() : queryContacts(query);
             final List<EventHit> events = EXCLUDED_CATS.contains("events") ? new ArrayList<>() : queryEvents(query);
             final List<SmsHit> sms = EXCLUDED_CATS.contains("sms") ? new ArrayList<>() : querySms(query);
@@ -1249,7 +1354,7 @@ public class MainActivity extends Activity {
                 if (files.isEmpty() && contacts.isEmpty() && events.isEmpty()
                         && sms.isEmpty() && calls.isEmpty() && notifs.isEmpty()) {
                     TextView none = new TextView(this);
-                    none.setText("Keine Treffer.");
+                    none.setText(getString(R.string.ui_keine_treffer));
                     none.setTextColor(Color.parseColor("#8899AA"));
                     none.setTextSize(13 * fs);
                     results.addView(none);
@@ -1259,9 +1364,7 @@ public class MainActivity extends Activity {
                 // scrollen (Mathias' Wunsch) - addFileCards klappt ihre Karte auf.
                 if (files.size() >= SEARCH_LIMIT) {
                     TextView many = new TextView(this);
-                    many.setText("Sehr viele Treffer – die ersten " + SEARCH_LIMIT
-                            + " werden gezeigt. Zum Eingrenzen: Suchbegriff ergänzen,"
-                            + " „In Ordner suchen…“ oder die erweiterte Suche nutzen.");
+                    many.setText(getString(R.string.many_results, SEARCH_LIMIT));
                     many.setTextColor(Color.parseColor("#E0A030"));
                     many.setTextSize(12 * fs);
                     many.setPadding(0, 0, 0, 6 * d);
@@ -1269,11 +1372,11 @@ public class MainActivity extends Activity {
                 }
                 View[] highlightHolder = new View[1];
                 addFileCards(results, files, d, highlightHolder);
-                if (!contacts.isEmpty()) results.addView(card("Kontakte", contacts.size(), d, contactRows(contacts, d), "contacts"));
-                if (!events.isEmpty()) results.addView(card("Termine", events.size(), d, eventRows(events, d), "events"));
-                if (!sms.isEmpty()) results.addView(card("SMS", sms.size(), d, smsRows(sms, d), "sms"));
-                if (!calls.isEmpty()) results.addView(card("Anrufe", calls.size(), d, callRows(calls, d), "calls"));
-                if (!notifs.isEmpty()) results.addView(card("Nachrichten", notifs.size(), d, notifRows(notifs, d), "notifs"));
+                if (!contacts.isEmpty()) results.addView(card(getString(R.string.cat_contacts), contacts.size(), d, contactRows(contacts, d), "contacts"));
+                if (!events.isEmpty()) results.addView(card(getString(R.string.cat_events), events.size(), d, eventRows(events, d), "events"));
+                if (!sms.isEmpty()) results.addView(card(getString(R.string.cat_sms), sms.size(), d, smsRows(sms, d), "sms"));
+                if (!calls.isEmpty()) results.addView(card(getString(R.string.cat_calls), calls.size(), d, callRows(calls, d), "calls"));
+                if (!notifs.isEmpty()) results.addView(card(getString(R.string.cat_notifs), notifs.size(), d, notifRows(notifs, d), "notifs"));
                 if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
             });
         });
@@ -1322,7 +1425,7 @@ public class MainActivity extends Activity {
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         col.addView(name);
 
-        if (h.snippet != null && !h.snippet.isEmpty()) col.addView(smallText(h.snippet, "#B0B0B5"));
+        if (h.snippet != null && !h.snippet.isEmpty()) col.addView(snippetView(h.snippet));
         String meta = (h.appLabel == null ? h.pkg : h.appLabel) + " · "
                 + DateUtils.getRelativeTimeSpanString(h.posted, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS);
         col.addView(smallText(meta, "#6E6E73"));
@@ -1388,7 +1491,7 @@ public class MainActivity extends Activity {
         }
         if (rows.size() > PAGE) {
             TextView more = new TextView(this);
-            more.setText(expanded ? "Weniger anzeigen ▲" : "Mehr anzeigen (" + (rows.size() - PAGE) + ") ▼");
+            more.setText(expanded ? getString(R.string.ui_weniger_anzeigen) : getString(R.string.show_more_simple, rows.size() - PAGE));
             more.setTextColor(Color.parseColor("#2E9BE6"));
             more.setTextSize(12 * fs);
             more.setPadding(14 * d, 8 * d, 14 * d, 4 * d);
@@ -1419,7 +1522,15 @@ public class MainActivity extends Activity {
             row.setBackground(hbg);
             if (highlightHolder != null) highlightHolder[0] = row;
         }
-        row.addView(rowThumbOrIcon(h, d));
+        if (h.isFolder) {
+            TextView fi = new TextView(this);
+            fi.setText("📁");
+            fi.setTextSize(20 * fs);
+            fi.setPadding(4 * d, 0, 10 * d, 0);
+            row.addView(fi);
+        } else {
+            row.addView(rowThumbOrIcon(h, d));
+        }
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -1441,7 +1552,7 @@ public class MainActivity extends Activity {
         nameRow.addView(name);
         if (isLastOpened) {
             TextView badge = new TextView(this);
-            badge.setText(" zuletzt geöffnet ");
+            badge.setText(getString(R.string.ui_zuletzt_geoffnet));
             badge.setTextColor(Color.parseColor("#2E9BE6"));
             badge.setTextSize(10 * fs);
             nameRow.addView(badge);
@@ -1461,14 +1572,17 @@ public class MainActivity extends Activity {
         }
 
         if (h.drm) {
-            col.addView(smallText("Kopiergeschützt – nur Name durchsucht", "#C9A227"));
+            col.addView(smallText(getString(R.string.copy_protected_name_only), "#C9A227"));
         } else if (h.snippet != null && !h.snippet.isEmpty()) {
-            col.addView(smallText(h.snippet, "#B0B0B5"));
+            col.addView(snippetView(h.snippet));
         }
         col.addView(smallText(h.path, "#6E6E73"));
         row.addView(col);
 
-        row.setOnClickListener(v -> openFile(h.path));
+        row.setOnClickListener(v -> {
+            if (h.isFolder) { scopeFolder = h.path; rebuild(); }
+            else openFile(h.path);
+        });
         return row;
     }
 
@@ -1880,6 +1994,91 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    /** Fundstellen-Schnipsel: die vom FTS-snippet() mit den Steuerzeichen
+     *  U+0002/U+0003 markierten Fundwoerter werden farblich kraeftig hervorgehoben
+     *  (fett + Akzentfarbe + leichte Hinterlegung) UND mit »...« umrahmt
+     *  (Mathias' Wunsch: gut sichtbar mitsamt Umrahmung). */
+    private TextView snippetView(String raw) {
+        TextView t = smallText("", "#B0B0B5");
+        final int MARK_START = 2, MARK_END = 3;   // U+0002 / U+0003
+        final int accent = Color.parseColor("#FFC107");      // Akzent (Bernstein)
+        final int bg = Color.parseColor("#33FFC107");         // leichte Hinterlegung
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        int i = 0, n = raw.length();
+        while (i < n) {
+            char c = raw.charAt(i);
+            if (c == MARK_START) {
+                int end = raw.indexOf(MARK_END, i + 1);
+                if (end < 0) end = n;
+                String word = raw.substring(i + 1, end);
+                int from = sb.length();
+                sb.append('»').append(word).append('«');
+                int to = sb.length();
+                sb.setSpan(new android.text.style.ForegroundColorSpan(accent), from, to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), from, to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new android.text.style.BackgroundColorSpan(bg), from, to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                i = (end < n) ? end + 1 : n;
+            } else {
+                sb.append(c);
+                i++;
+            }
+        }
+        t.setText(sb);
+        return t;
+    }
+
+    // ---------- Hilfe zur Suche ----------
+
+    /** Erklaert alle Suchoptionen und die Suchsyntax (Mathias' Wunsch: die
+     *  Optionen werden allmaehlich komplex). Scrollbarer Dialog. */
+    private void showSearchHelp() {
+        int d = dp(1);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = 18 * d;
+        box.setPadding(pad, pad, pad, pad);
+
+        helpH(box, getString(R.string.help_h_area), d);
+        helpB(box, getString(R.string.help_b_area), d);
+        helpH(box, getString(R.string.help_h_options), d);
+        helpB(box, getString(R.string.help_b_options), d);
+        helpH(box, getString(R.string.help_h_terms), d);
+        helpB(box, getString(R.string.help_b_terms), d);
+        helpH(box, getString(R.string.help_h_categories), d);
+        helpB(box, getString(R.string.help_b_categories), d);
+        helpH(box, getString(R.string.help_h_narrow), d);
+        helpB(box, getString(R.string.help_b_narrow), d);
+        helpH(box, getString(R.string.help_h_hits), d);
+        helpB(box, getString(R.string.help_b_hits), d);
+
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(box);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.help_title))
+                .setView(sv)
+                .setPositiveButton(getString(R.string.help_close), null)
+                .show();
+    }
+
+    private void helpH(LinearLayout box, String title, int d) {
+        TextView t = new TextView(this);
+        t.setText(title);
+        t.setTextColor(Color.parseColor("#2E9BE6"));
+        t.setTextSize(15 * fs);
+        t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+        t.setPadding(0, 14 * d, 0, 4 * d);
+        box.addView(t);
+    }
+
+    private void helpB(LinearLayout box, String text, int d) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextColor(Color.parseColor("#D0D0D5"));
+        t.setTextSize(13.5f * fs);
+        t.setLineSpacing(2 * d, 1f);
+        box.addView(t);
+    }
+
     // ---------- Berechtigungen ----------
 
     /** Aufklappbarer, erklaerter Berechtigungs-Abschnitt (Dreieck ▸/▾): alle
@@ -1893,7 +2092,7 @@ public class MainActivity extends Activity {
         boolean open = (permsOpen != null) ? permsOpen : anyMissing;
 
         TextView head = new TextView(this);
-        head.setText((open ? "▾ " : "▸ ") + "Berechtigungen");
+        head.setText((open ? "▾ " : "▸ ") + getString(R.string.sec_permissions));
         head.setTextColor(Color.parseColor("#2E9BE6"));
         head.setTextSize(15 * fs);
         head.setPadding(0, 14 * d, 0, 8 * d);
@@ -1904,7 +2103,7 @@ public class MainActivity extends Activity {
 
         for (de.herbers.common.PermReminder.Perm perm : perms) {
             TextView name = new TextView(this);
-            name.setText((perm.granted ? "✓  " : "✗  ") + perm.label + (perm.granted ? "" : "  –  fehlt"));
+            name.setText((perm.granted ? "✓  " : "✗  ") + perm.label + (perm.granted ? "" : getString(R.string.perm_missing_suffix)));
             name.setTextColor(perm.granted ? Color.parseColor("#5BD68A") : Color.parseColor("#E0533A"));
             name.setTextSize(14 * fs);
             name.setPadding(4 * d, 8 * d, 4 * d, 2 * d);
@@ -1918,14 +2117,14 @@ public class MainActivity extends Activity {
                 root.addView(why);
             }
             Button go = new Button(this);
-            go.setText(perm.granted ? "In den Einstellungen ändern" : "Jetzt erteilen");
+            go.setText(perm.granted ? getString(R.string.perm_change) : getString(R.string.perm_grant_now));
             go.setOnClickListener(v -> {
                 try {
                     Intent i = perm.settings;
                     i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(i);
                 } catch (Throwable t) {
-                    Toast.makeText(this, "Einstellung nicht verfügbar", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.ui_einstellung_nicht_verfugbar), Toast.LENGTH_SHORT).show();
                 }
             });
             root.addView(go);
@@ -1935,10 +2134,10 @@ public class MainActivity extends Activity {
             // dafuer gibt es nichts zu loeschen.
             Runnable clear = null; String clearLabel = null;
             if ("storage".equals(perm.key)) {
-                clearLabel = "Datei-Index löschen";
+                clearLabel = getString(R.string.clear_file_index);
                 clear = () -> SearchStore.get(this).clearAll();
             } else if ("notif".equals(perm.key)) {
-                clearLabel = "Erfasste Benachrichtigungen löschen";
+                clearLabel = getString(R.string.clear_captured_notifs);
                 clear = () -> SearchStore.get(this).clearNotifications();
             }
             if (clear != null) {
@@ -1955,12 +2154,12 @@ public class MainActivity extends Activity {
     /** Sicherheitsabfrage vor dem Loeschen von Datenbank-Inhalten. */
     private void confirmClear(String what, Runnable action) {
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Wirklich löschen?")
-                .setMessage("„" + what + "“ – das lässt sich nicht rückgängig machen.")
-                .setNegativeButton("Abbrechen", null)
-                .setPositiveButton("Löschen", (dlg, w) -> {
-                    try { action.run(); Toast.makeText(this, "Gelöscht.", Toast.LENGTH_SHORT).show(); }
-                    catch (Throwable t) { Toast.makeText(this, "Löschen fehlgeschlagen.", Toast.LENGTH_SHORT).show(); }
+                .setTitle(getString(R.string.ui_wirklich_loschen))
+                .setMessage(getString(R.string.undo_cannot, what))
+                .setNegativeButton(getString(R.string.ui_abbrechen), null)
+                .setPositiveButton(getString(R.string.ui_loschen), (dlg, w) -> {
+                    try { action.run(); Toast.makeText(this, getString(R.string.ui_geloscht), Toast.LENGTH_SHORT).show(); }
+                    catch (Throwable t) { Toast.makeText(this, getString(R.string.ui_loschen_fehlgeschlagen), Toast.LENGTH_SHORT).show(); }
                     rebuild();
                 })
                 .show();
@@ -1989,13 +2188,13 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(0, 8 * d, 0, 12 * d);
         TextView t = new TextView(this);
-        t.setText("Für die Dateisuche fehlt der Zugriff auf \"Alle Dateien\".");
+        t.setText(getString(R.string.ui_fur_die_dateisuche_fehlt_der));
         t.setTextColor(Color.parseColor("#CCCCCC"));
         t.setTextSize(13 * fs);
         t.setPadding(0, 0, 0, 10 * d);
         box.addView(t);
         Button allow = new Button(this);
-        allow.setText("Zugriff erlauben");
+        allow.setText(getString(R.string.ui_zugriff_erlauben));
         allow.setOnClickListener(v -> openAllFilesSettings());
         box.addView(allow);
         return box;
@@ -2024,13 +2223,12 @@ public class MainActivity extends Activity {
             startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:" + getPackageName())));
             android.widget.Toast.makeText(this,
-                    "Bitte unter Berechtigungen \"Alle Dateien\" manuell erlauben.",
+                    getString(R.string.perm_manual_hint),
                     android.widget.Toast.LENGTH_LONG).show();
             return;
         } catch (Exception ignored) {}
         android.widget.Toast.makeText(this,
-                "Einstellungen konnten nicht geöffnet werden - bitte manuell: "
-                + "System-Einstellungen → Apps → Sucher → Berechtigungen → Alle Dateien.",
+                getString(R.string.settings_open_failed),
                 android.widget.Toast.LENGTH_LONG).show();
     }
 
@@ -2039,21 +2237,19 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(0, 0, 0, 12 * d);
         TextView t = new TextView(this);
-        t.setText("Nachrichten (Chats/Mails) nur teilweise durchsuchbar - "
-                + "nur was als Benachrichtigung durchkommt, keine volle Historie.");
+        t.setText(getString(R.string.msg_nachrichten_chats_mails_nur_));
         t.setTextColor(Color.parseColor("#CCCCCC"));
         t.setTextSize(13 * fs);
         t.setPadding(0, 0, 0, 10 * d);
         box.addView(t);
         Button allow = new Button(this);
-        allow.setText("Benachrichtigungszugriff erlauben");
+        allow.setText(getString(R.string.ui_benachrichtigungszugriff_erl));
         allow.setOnClickListener(v -> {
             try {
                 startActivity(new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
             } catch (Exception e) {
                 android.widget.Toast.makeText(this,
-                        "Bitte manuell: System-Einstellungen → Apps → "
-                        + "Benachrichtigungszugriff → Sucher.",
+                        getString(R.string.notif_access_manual_hint),
                         android.widget.Toast.LENGTH_LONG).show();
             }
         });
@@ -2066,13 +2262,13 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(0, 0, 0, 12 * d);
         TextView t = new TextView(this);
-        t.setText("Kontakte/Termine noch nicht durchsuchbar (Berechtigung fehlt).");
+        t.setText(getString(R.string.ui_kontakte_termine_noch_nicht_));
         t.setTextColor(Color.parseColor("#CCCCCC"));
         t.setTextSize(13 * fs);
         t.setPadding(0, 0, 0, 10 * d);
         box.addView(t);
         Button allow = new Button(this);
-        allow.setText("Kontakte/Termine erlauben");
+        allow.setText(getString(R.string.ui_kontakte_termine_erlauben));
         allow.setOnClickListener(v -> requestPermissions(new String[]{
                 android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.READ_CALENDAR}, REQ_PIM));
         box.addView(allow);
@@ -2112,7 +2308,7 @@ public class MainActivity extends Activity {
                 main.post(() -> {
                     backupRunning = false;
                     android.widget.Toast.makeText(this,
-                            finalOk ? "Gesichert." : "Sicherung fehlgeschlagen.",
+                            finalOk ? getString(R.string.backed_up) : getString(R.string.backup_failed),
                             android.widget.Toast.LENGTH_SHORT).show();
                     rebuild();
                 });
@@ -2133,7 +2329,7 @@ public class MainActivity extends Activity {
                 main.post(() -> {
                     backupRunning = false;
                     android.widget.Toast.makeText(this,
-                            finalOk ? "Wiederhergestellt." : "Datei nicht lesbar oder kein gültiges Sucher-Sicherungsformat.",
+                            finalOk ? getString(R.string.restored_ok) : getString(R.string.restore_failed),
                             android.widget.Toast.LENGTH_LONG).show();
                     rebuild();
                 });
@@ -2145,9 +2341,7 @@ public class MainActivity extends Activity {
 
     private void buildSettings(LinearLayout root, int d) {
         TextView intro = new TextView(this);
-        intro.setText("Durchsucht Dateinamen UND -inhalte (Text, Office, PDF, "
-                + "E-Books, Comic-Metadaten) sowie Kontakte/Termine. Erst muss "
-                + "der Zugriff erlaubt und mindestens ein Ordner gewählt werden.");
+        intro.setText(getString(R.string.msg_durchsucht_dateinamen_und_in));
         intro.setTextColor(Color.GRAY);
         intro.setTextSize(12 * fs);
         intro.setPadding(0, 10 * d, 0, 10 * d);
@@ -2160,10 +2354,10 @@ public class MainActivity extends Activity {
         permsSection(root, d);
         if (hasNotifPermission()) buildNotifSourcesToggle(root, d);
 
-        section(root, "Schriftgröße", d);
+        section(root, getString(R.string.sec_fontsize), d);
         buildFontScaleRow(root, d);
 
-        section(root, "Durchsuchte Ordner", d);
+        section(root, getString(R.string.sec_folders), d);
         List<String> folders = new ArrayList<>(Settings.searchFolders(this));
         java.util.Collections.sort(folders);
         for (String folder : folders) {
@@ -2196,7 +2390,7 @@ public class MainActivity extends Activity {
             // Ordner immer, unabhaengig davon.
             CheckBox contentCb = new CheckBox(this);
             contentCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-            contentCb.setText("  Inhalt durchsuchbar machen (mehr Speicher, dauert länger)");
+            contentCb.setText(getString(R.string.ui_inhalt_durchsuchbar_machen_m));
             contentCb.setTextColor(Color.parseColor("#B0B0B5"));
             contentCb.setTextSize(11.5f * fs);
             contentCb.setPadding(0, 0, 0, 6 * d);
@@ -2206,7 +2400,7 @@ public class MainActivity extends Activity {
         }
         if (folders.isEmpty()) {
             TextView none = new TextView(this);
-            none.setText("Noch keine Ordner gewählt.");
+            none.setText(getString(R.string.ui_noch_keine_ordner_gewahlt));
             none.setTextColor(Color.parseColor("#9E9E9E"));
             none.setTextSize(13 * fs);
             root.addView(none);
@@ -2223,7 +2417,7 @@ public class MainActivity extends Activity {
             String internal = Environment.getExternalStorageDirectory().getAbsolutePath();
             if (!Settings.searchFolders(this).contains(internal)) {
                 Button addInternal = new Button(this);
-                addInternal.setText("Internen Speicher durchsuchen");
+                addInternal.setText(getString(R.string.ui_internen_speicher_durchsuche));
                 addInternal.setOnClickListener(v -> {
                     Settings.addSearchFolder(this, internal);
                     IndexJobService.ensureScheduled(this);
@@ -2234,7 +2428,7 @@ public class MainActivity extends Activity {
             }
 
             Button add = new Button(this);
-            add.setText("+ Anderen Ordner hinzufügen");
+            add.setText(getString(R.string.msg_anderen_ordner_hinzufugen));
             add.setOnClickListener(v -> {
                 folderPicking = true;
                 if (browsePath == null) browsePath = Environment.getExternalStorageDirectory().getAbsolutePath();
@@ -2243,44 +2437,36 @@ public class MainActivity extends Activity {
             root.addView(add);
         }
 
-        section(root, "Comic-Metadaten (CBZ)", d);
+        section(root, getString(R.string.sec_comic_meta), d);
         CheckBox comicCb = new CheckBox(this);
         comicCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        comicCb.setText("  ComicInfo.xml mit indizieren (Serie, Titel, Zusammenfassung)");
+        comicCb.setText(getString(R.string.ui_comicinfo_xml_mit_indizieren));
         comicCb.setTextColor(Color.WHITE);
         comicCb.setTextSize(13 * fs);
         comicCb.setChecked(Settings.searchComicsMeta(this));
         comicCb.setOnCheckedChangeListener((v, on) -> Settings.setSearchComicsMeta(this, on));
         root.addView(comicCb);
 
-        section(root, "Archive durchsuchen (ZIP/7z/TAR)", d);
+        section(root, getString(R.string.sec_archives), d);
         CheckBox arcCb = new CheckBox(this);
         arcCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        arcCb.setText("  Dokumente IN Archiven mitindizieren (teuer)");
+        arcCb.setText(getString(R.string.ui_dokumente_in_archiven_mitind));
         arcCb.setTextColor(Color.WHITE);
         arcCb.setTextSize(13 * fs);
         arcCb.setChecked(Settings.indexArchives(this));
         arcCb.setOnCheckedChangeListener((v, on) -> Settings.setIndexArchives(this, on));
         root.addView(arcCb);
         TextView arcHint = new TextView(this);
-        arcHint.setText("An: Der Volltext eines Archivs umfasst auch die Texte der Dokumente darin "
-                + "(PDF, Office, E-Books …) – so findest du ein Archiv über seinen Inhalt. "
-                + "Unterstützt: ZIP, 7z, TAR (auch .gz/.bz2/.xz) und einzeln komprimierte "
-                + "Dateien (z. B. bericht.pdf.gz). RAR nur dem Namen nach (es gibt keinen "
-                + "freien, GPL-kompatiblen RAR-Entpacker) – RAR-Inhalte findest du, indem du "
-                + "das Archiv einmal als ZIP oder 7z neu packst. Kostet beim Indizieren "
-                + "spürbar mehr Zeit, weil "
-                + "jedes enthaltene Dokument entpackt und einzeln ausgelesen wird. Nur in Ordnern "
-                + "mit „Inhalt durchsuchbar“.");
+        arcHint.setText(getString(R.string.msg_an_der_volltext_eines_archiv));
         arcHint.setTextColor(Color.parseColor("#8899AA"));
         arcHint.setTextSize(11.5f * fs);
         arcHint.setPadding(0, 0, 0, 4 * d);
         root.addView(arcHint);
 
-        section(root, "Vorschaubilder", d);
+        section(root, getString(R.string.sec_thumbs), d);
         CheckBox thumbCb = new CheckBox(this);
         thumbCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        thumbCb.setText("  Dauerhaft speichern (überleben „Cache leeren“ / SD Maid)");
+        thumbCb.setText(getString(R.string.ui_dauerhaft_speichern_uberlebe));
         thumbCb.setTextColor(Color.WHITE);
         thumbCb.setTextSize(13 * fs);
         thumbCb.setChecked(Settings.thumbsPersistent(this));
@@ -2291,24 +2477,21 @@ public class MainActivity extends Activity {
         });
         root.addView(thumbCb);
         TextView thumbHint = new TextView(this);
-        thumbHint.setText("An: Vorschaubilder liegen im app-internen Speicher und bleiben erhalten "
-                + "(zählen als App-Daten). Aus: sie liegen im Cache und dürfen bei Speichernot "
-                + "geräumt werden (werden dann bei Bedarf neu erzeugt). Nicht in der Datenbank – "
-                + "die Sicherung bleibt schlank.");
+        thumbHint.setText(getString(R.string.msg_an_vorschaubilder_liegen_im_));
         thumbHint.setTextColor(Color.parseColor("#8899AA"));
         thumbHint.setTextSize(11.5f * fs);
         thumbHint.setPadding(0, 0, 0, 4 * d);
         root.addView(thumbHint);
 
-        section(root, "Index", d);
+        section(root, getString(R.string.sec_index), d);
         boolean running = SearchIndexer.isRunning();
         SearchStore idxStore = SearchStore.get(this);
         int count = idxStore.indexedCount();
         long last = Settings.searchLastRun(this);
         TextView status = new TextView(this);
-        status.setText(last == 0 ? (count + " Dateien indiziert.")
-                : count + " Dateien indiziert – zuletzt "
-                  + DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS));
+        status.setText(last == 0 ? getString(R.string.files_indexed, count)
+                : getString(R.string.files_indexed_last, count,
+                    DateUtils.getRelativeTimeSpanString(last, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)));
         status.setTextColor(Color.GRAY);
         status.setTextSize(12 * fs);
         status.setPadding(0, 0, 0, 2 * d);
@@ -2324,28 +2507,25 @@ public class MainActivity extends Activity {
         int contentTotal = idxStore.contentEligibleCount();
         TextView contentStatus = new TextView(this);
         String pct = contentTotal > 0 ? " (" + Math.round(100f * contentDone / contentTotal) + " %)" : "";
-        contentStatus.setText("davon " + contentDone + " von " + contentTotal
-                + " infrage kommenden Dateien mit Volltext" + pct);
+        contentStatus.setText(getString(R.string.content_status, contentDone, contentTotal, pct));
         contentStatus.setTextColor(Color.parseColor("#8899AA"));
         contentStatus.setTextSize(12 * fs);
         contentStatus.setPadding(0, 0, 0, 6 * d);
         root.addView(contentStatus);
 
         if (running) {
-            String ph = SearchIndexer.phase == 1 ? "Phase 1/3: Dateien erfassen (Namen)"
-                    : SearchIndexer.phase == 2 ? "Phase 2/3: Inhalt/Titel erfassen"
-                    : SearchIndexer.phase == 3 ? "Phase 3/3: Titelbilder" : "Läuft";
+            String ph = SearchIndexer.phase == 1 ? getString(R.string.phase1)
+                    : SearchIndexer.phase == 2 ? getString(R.string.phase2)
+                    : SearchIndexer.phase == 3 ? getString(R.string.phase3) : getString(R.string.phase_running);
             TextView live = new TextView(this);
-            live.setText(ph + " – " + SearchIndexer.scanned + " geprüft, "
-                    + SearchIndexer.contentIndexed + " mit neuem Volltext, "
-                    + SearchIndexer.thumbsMade + " Titelbilder");
+            live.setText(getString(R.string.live_status, ph, SearchIndexer.scanned, SearchIndexer.contentIndexed, SearchIndexer.thumbsMade));
             live.setTextColor(Color.parseColor("#2E9BE6"));
             live.setTextSize(12 * fs);
             live.setPadding(0, 0, 0, 2 * d);
             root.addView(live);
 
             TextView currentFile = new TextView(this);
-            currentFile.setText("Gerade dran: " + SearchIndexer.currentPath);
+            currentFile.setText(getString(R.string.currently_file, SearchIndexer.currentPath));
             currentFile.setTextColor(Color.parseColor("#8899AA"));
             currentFile.setTextSize(11 * fs);
             currentFile.setPadding(0, 0, 0, 6 * d);
@@ -2358,11 +2538,11 @@ public class MainActivity extends Activity {
             // kaputten Zwischenstand (siehe SearchIndexer) - "Jetzt neu
             // indizieren" nach dem Stopp macht faktisch ein "Fortsetzen":
             // bereits erfasste, unveraenderte Dateien werden uebersprungen.
-            reindex.setText("Stoppen (" + SearchIndexer.scanned + " geprüft)");
+            reindex.setText(getString(R.string.stop_checked, SearchIndexer.scanned));
             reindex.setEnabled(true);
             reindex.setOnClickListener(v -> { SearchIndexer.requestStop(); rebuild(); });
         } else {
-            reindex.setText("Jetzt neu indizieren");
+            reindex.setText(getString(R.string.ui_jetzt_neu_indizieren));
             reindex.setEnabled(!folders.isEmpty());
             reindex.setOnClickListener(v -> {
                 PdfExtractorHelper.init(getApplicationContext());
@@ -2374,7 +2554,7 @@ public class MainActivity extends Activity {
 
         CheckBox autoCb = new CheckBox(this);
         autoCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        autoCb.setText("  Automatisch alle paar Stunden im Hintergrund aktualisieren");
+        autoCb.setText(getString(R.string.ui_automatisch_alle_paar_stunde));
         autoCb.setTextColor(Color.WHITE);
         autoCb.setTextSize(13 * fs);
         autoCb.setChecked(Settings.autoReindex(this));
@@ -2391,7 +2571,7 @@ public class MainActivity extends Activity {
         // solchen Haenger. Android startet den Prozess danach hoechstens
         // leerlaufend als Benachrichtigungs-Listener neu, nicht den Indizierer.
         Button quit = new Button(this);
-        quit.setText("Sucher beenden (Indizierung sofort stoppen)");
+        quit.setText(getString(R.string.ui_sucher_beenden_indizierung_s));
         quit.setOnClickListener(v -> {
             SearchIndexer.requestStop();
             finishAffinity();
@@ -2399,16 +2579,16 @@ public class MainActivity extends Activity {
         });
         root.addView(quit);
 
-        section(root, "Sicherung", d);
+        section(root, getString(R.string.sec_backup), d);
         TextView backupDesc = new TextView(this);
-        backupDesc.setText("Einstellungen UND den kompletten Suchindex (alle bereits erfassten Volltexte) als Datei sichern oder aus einer solchen Datei wiederherstellen (ersetzt dabei den kompletten aktuellen Stand).");
+        backupDesc.setText(getString(R.string.ui_einstellungen_und_den_komple));
         backupDesc.setTextColor(Color.parseColor("#8899AA"));
         backupDesc.setTextSize(12 * fs);
         backupDesc.setPadding(0, 0, 0, 8 * d);
         root.addView(backupDesc);
         if (backupRunning) {
             TextView backupRunningLabel = new TextView(this);
-            backupRunningLabel.setText("Läuft noch … (bei einem großen Index kann das etwas dauern)");
+            backupRunningLabel.setText(getString(R.string.ui_lauft_noch_bei_einem_grossen));
             backupRunningLabel.setTextColor(Color.parseColor("#2E9BE6"));
             backupRunningLabel.setTextSize(12 * fs);
             backupRunningLabel.setPadding(0, 0, 0, 8 * d);
@@ -2417,7 +2597,7 @@ public class MainActivity extends Activity {
         LinearLayout backupRow = new LinearLayout(this);
         backupRow.setOrientation(LinearLayout.HORIZONTAL);
         Button exportBtn = new Button(this);
-        exportBtn.setText("Sichern…");
+        exportBtn.setText(getString(R.string.ui_sichern));
         exportBtn.setEnabled(!backupRunning);
         exportBtn.setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -2429,7 +2609,7 @@ public class MainActivity extends Activity {
         });
         backupRow.addView(exportBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         Button importBtn = new Button(this);
-        importBtn.setText("Wiederherstellen…");
+        importBtn.setText(getString(R.string.ui_wiederherstellen));
         importBtn.setEnabled(!backupRunning);
         importBtn.setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
@@ -2451,11 +2631,9 @@ public class MainActivity extends Activity {
         java.util.List<String> skipped = new ArrayList<>(Settings.skipContentPaths(this));
         java.util.Collections.sort(skipped);
         if (!skipped.isEmpty()) {
-            section(root, "Problematische Dateien", d);
+            section(root, getString(R.string.sec_problem_files), d);
             TextView hint = new TextView(this);
-            hint.setText("Diese Datei(en) haben den Indizierer zum Hängen gebracht und werden "
-                    + "jetzt nur noch über den Namen erfasst (kein Inhalt/Titelbild). Über ✕ "
-                    + "wieder freigeben, falls du es erneut versuchen willst.");
+            hint.setText(getString(R.string.msg_diese_datei_en_haben_den_ind));
             hint.setTextColor(Color.parseColor("#8899AA"));
             hint.setTextSize(12 * fs);
             hint.setPadding(0, 0, 0, 6 * d);
@@ -2481,10 +2659,9 @@ public class MainActivity extends Activity {
             }
         }
 
-        section(root, "Diagnose-Protokoll", d);
+        section(root, getString(R.string.sec_diag_log), d);
         TextView diagHint = new TextView(this);
-        diagHint.setText("Was der Indizierer zuletzt getan hat und an welchen Dateien er sich "
-                + "verschluckt hat – hilft bei der Fehlersuche. Neueste Einträge oben.");
+        diagHint.setText(getString(R.string.msg_was_der_indizierer_zuletzt_g));
         diagHint.setTextColor(Color.parseColor("#8899AA"));
         diagHint.setTextSize(12 * fs);
         diagHint.setPadding(0, 0, 0, 6 * d);
@@ -2493,7 +2670,7 @@ public class MainActivity extends Activity {
         // Schalter + Knoepfe stehen bewusst ueber dem Protokoll (Mathias' Wunsch).
         CheckBox showLog = new CheckBox(this);
         showLog.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        showLog.setText("  Protokoll anzeigen");
+        showLog.setText(getString(R.string.ui_protokoll_anzeigen));
         showLog.setTextColor(Color.WHITE);
         showLog.setTextSize(13 * fs);
         showLog.setChecked(Settings.showDiagLog(this));
@@ -2504,12 +2681,12 @@ public class MainActivity extends Activity {
         boolean show = Settings.showDiagLog(this);
         if (show) {
             Button clear = new Button(this);
-            clear.setText("Protokoll löschen");
+            clear.setText(getString(R.string.ui_protokoll_loschen));
             clear.setOnClickListener(v -> { DiagLog.clear(this); rebuild(); });
             root.addView(clear);
             if (diag == null || diag.isEmpty()) {
                 TextView none = new TextView(this);
-                none.setText("(noch leer)");
+                none.setText(getString(R.string.ui_noch_leer));
                 none.setTextColor(Color.GRAY);
                 none.setTextSize(12 * fs);
                 root.addView(none);
@@ -2531,55 +2708,45 @@ public class MainActivity extends Activity {
     private static boolean changelogOpen = false;
 
     private void buildAboutSection(LinearLayout root, int d) {
-        section(root, "Über Sucher", d);
+        section(root, getString(R.string.sec_about), d);
         String vn;
         try { vn = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; }
         catch (Exception e) { vn = "?"; }
         TextView ver = new TextView(this);
-        ver.setText("Sucher " + vn);
+        ver.setText(getString(R.string.sucher_version, vn));
         ver.setTextColor(Color.parseColor("#2E9BE6"));
         ver.setTextSize(15 * fs);
         ver.setPadding(0, 0, 0, 8 * d);
         root.addView(ver);
 
         TextView desc = new TextView(this);
-        desc.setText("Eigenständige Volltextsuche über Dateien (Text, Office, PDF, "
-                + "E-Books, Comic-Metadaten), Kontakte, Termine und mitgeschnittene "
-                + "Benachrichtigungen. Ursprünglich als Karte in EdgeTab entstanden.");
+        desc.setText(getString(R.string.msg_eigenstandige_volltextsuche_));
         desc.setTextColor(Color.parseColor("#CCCCCC"));
         desc.setTextSize(13 * fs);
         root.addView(desc);
 
         TextView licTitle = new TextView(this);
-        licTitle.setText("Lizenz");
+        licTitle.setText(getString(R.string.ui_lizenz));
         licTitle.setTextColor(Color.parseColor("#2E9BE6"));
         licTitle.setTextSize(13 * fs);
         licTitle.setPadding(0, 14 * d, 0, 4 * d);
         root.addView(licTitle);
 
         TextView lic = new TextView(this);
-        lic.setText("GNU General Public License v3 (oder später). Copyright (c) 2026 "
-                + "Mathias Herbers. Vollständiger Lizenztext: LICENSE im Quellcode-"
-                + "Repository.\n\n"
-                + "Enthält Drittanbieter-Bibliotheken unter jeweils eigener "
-                + "Open-Source-Lizenz (mit der GPLv3 kombinierbar): Apache POI, "
-                + "PDFBox-Android, Apache Commons (Collections, Compress, IO, Math), "
-                + "Apache Log4j API und SparseBitSet (alle Apache License 2.0), sowie "
-                + "curvesapi (BSD-Lizenz). Volle Lizenztexte liegen den jeweiligen "
-                + "Bibliotheks-Dateien bei.");
+        lic.setText(getString(R.string.msg_gnu_general_public_license_v));
         lic.setTextColor(Color.parseColor("#9E9E9E"));
         lic.setTextSize(12 * fs);
         root.addView(lic);
 
         TextView clTitle = new TextView(this);
-        clTitle.setText("Änderungsprotokoll");
+        clTitle.setText(getString(R.string.ui_anderungsprotokoll));
         clTitle.setTextColor(Color.parseColor("#2E9BE6"));
         clTitle.setTextSize(13 * fs);
         clTitle.setPadding(0, 14 * d, 0, 4 * d);
         root.addView(clTitle);
 
         Button toggle = new Button(this);
-        toggle.setText(changelogOpen ? "Änderungsprotokoll ausblenden" : "Änderungsprotokoll anzeigen");
+        toggle.setText(changelogOpen ? getString(R.string.changelog_hide) : getString(R.string.changelog_show));
         toggle.setOnClickListener(v -> { changelogOpen = !changelogOpen; rebuild(); });
         root.addView(toggle);
 
@@ -2590,7 +2757,7 @@ public class MainActivity extends Activity {
             box.setPadding(0, 8 * d, 0, 0);
             if (md == null) {
                 TextView err = new TextView(this);
-                err.setText("Änderungsprotokoll konnte nicht geladen werden.");
+                err.setText(getString(R.string.ui_anderungsprotokoll_konnte_ni));
                 err.setTextColor(Color.parseColor("#FFB0B0"));
                 err.setTextSize(12 * fs);
                 box.addView(err);
@@ -2679,19 +2846,19 @@ public class MainActivity extends Activity {
      *  (Mathias' Meldung), darum jetzt ein aufklappbares Untermenue statt
      *  einer immer sichtbaren Liste. */
     private void buildNotifSourcesToggle(LinearLayout root, int d) {
-        section(root, "Benachrichtigungsquellen", d);
+        section(root, getString(R.string.sec_notif_sources), d);
         int enabled = Settings.notifSources(this).size();
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         TextView t = new TextView(this);
-        t.setText(enabled == 0 ? "Noch keine Quelle ausgewählt." : enabled + " Quelle(n) ausgewählt.");
+        t.setText(enabled == 0 ? getString(R.string.no_source_selected) : getString(R.string.sources_selected, enabled));
         t.setTextColor(Color.GRAY);
         t.setTextSize(12 * fs);
         t.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         row.addView(t);
         Button edit = new Button(this);
-        edit.setText(notifSourcesOpen ? "Fertig" : "Bearbeiten");
+        edit.setText(notifSourcesOpen ? getString(R.string.btn_done) : getString(R.string.btn_edit));
         edit.setOnClickListener(v -> { notifSourcesOpen = !notifSourcesOpen; rebuild(); });
         row.addView(edit);
         root.addView(row);
@@ -2706,8 +2873,7 @@ public class MainActivity extends Activity {
     private void buildNotifSourcesSection(LinearLayout root, int d) {
         List<String[]> pkgs = allNotifyCapableApps();
         TextView hint = new TextView(this);
-        hint.setText("Welche Apps' Benachrichtigungen durchsuchbar sein sollen "
-                + "(nur was als Benachrichtigung durchkam, keine volle Historie):");
+        hint.setText(getString(R.string.msg_welche_apps_benachrichtigung));
         hint.setTextColor(Color.GRAY);
         hint.setTextSize(12 * fs);
         hint.setPadding(0, 8 * d, 0, 6 * d);
@@ -2787,7 +2953,7 @@ public class MainActivity extends Activity {
 
         CheckBox contentCb = new CheckBox(this);
         contentCb.setButtonTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#2E9BE6")));
-        contentCb.setText("  Inhalt gleich mit durchsuchbar machen (mehr Speicher, dauert länger)");
+        contentCb.setText(getString(R.string.ui_inhalt_gleich_mit_durchsuchb));
         contentCb.setTextColor(Color.parseColor("#B0B0B5"));
         contentCb.setTextSize(11.5f * fs);
         contentCb.setChecked(browseWantContent);
@@ -2795,7 +2961,7 @@ public class MainActivity extends Activity {
         box.addView(contentCb);
 
         Button choose = new Button(this);
-        choose.setText("Diesen Ordner hinzufügen");
+        choose.setText(getString(R.string.ui_diesen_ordner_hinzufugen));
         choose.setOnClickListener(v -> {
             Settings.addSearchFolder(this, browsePath);
             Settings.setContentIndexingEnabled(this, browsePath, browseWantContent);
@@ -2810,7 +2976,7 @@ public class MainActivity extends Activity {
         java.io.File parent = dir.getParentFile();
         if (parent != null) {
             TextView up = new TextView(this);
-            up.setText("⬆ .. (nach oben)");
+            up.setText(getString(R.string.ui_nach_oben));
             up.setTextColor(Color.parseColor("#B0B0B5"));
             up.setTextSize(13 * fs);
             up.setPadding(0, 6 * d, 0, 6 * d);
@@ -2834,7 +3000,7 @@ public class MainActivity extends Activity {
         }
 
         Button cancel = new Button(this);
-        cancel.setText("Abbrechen");
+        cancel.setText(getString(R.string.ui_abbrechen));
         cancel.setOnClickListener(v -> { folderPicking = false; rebuild(); });
         box.addView(cancel);
         return box;

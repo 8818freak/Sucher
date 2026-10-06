@@ -36,24 +36,21 @@ final class Perms {
         Intent files = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                 Uri.parse("package:" + ctx.getPackageName()));
         List<PermReminder.Perm> l = new ArrayList<>();
-        l.add(new PermReminder.Perm("storage", "Alle Dateien", storage(ctx), files,
-                "Um deine Dateien zu durchsuchen und zu indizieren – die Grundlage der App."));
-        l.add(new PermReminder.Perm("notif", "Benachrichtigungszugriff", notif(ctx),
+        l.add(new PermReminder.Perm("storage", ctx.getString(R.string.perm_storage_label), storage(ctx), files,
+                ctx.getString(R.string.perm_storage_desc)));
+        l.add(new PermReminder.Perm("notif", ctx.getString(R.string.perm_notif_label), notif(ctx),
                 new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"),
-                "Ab dem Erteilen werden eingehende Benachrichtigungen mitgeschnitten und "
-                + "durchsuchbar. Schon erfasste bleiben auch nach Entzug der Berechtigung in "
-                + "der Datenbank und weiter durchsuchbar (siehe „Erfasste Benachrichtigungen "
-                + "löschen“). Optional."));
-        l.add(new PermReminder.Perm("contacts", "Kontakte", con, appDetails(ctx),
-                "Um Kontakte in die Suche einzubeziehen (optional)."));
-        l.add(new PermReminder.Perm("calendar", "Termine", cal, appDetails(ctx),
-                "Um Termine in die Suche einzubeziehen (optional)."));
+                ctx.getString(R.string.perm_notif_desc)));
+        l.add(new PermReminder.Perm("contacts", ctx.getString(R.string.cat_contacts), con, appDetails(ctx),
+                ctx.getString(R.string.perm_contacts_desc)));
+        l.add(new PermReminder.Perm("calendar", ctx.getString(R.string.cat_events), cal, appDetails(ctx),
+                ctx.getString(R.string.perm_calendar_desc)));
         boolean sms = ctx.checkSelfPermission(android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
         boolean calls = ctx.checkSelfPermission(android.Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED;
-        l.add(new PermReminder.Perm("sms", "SMS", sms, appDetails(ctx),
-                "Um SMS-Nachrichten durchsuchbar zu machen (live abgefragt, nichts gespeichert)."));
-        l.add(new PermReminder.Perm("calls", "Anrufliste", calls, appDetails(ctx),
-                "Um die Anrufliste durchsuchbar zu machen (live abgefragt, nichts gespeichert)."));
+        l.add(new PermReminder.Perm("sms", ctx.getString(R.string.cat_sms), sms, appDetails(ctx),
+                ctx.getString(R.string.perm_sms_desc)));
+        l.add(new PermReminder.Perm("calls", ctx.getString(R.string.perm_calls_label), calls, appDetails(ctx),
+                ctx.getString(R.string.perm_calls_desc)));
         return l;
     }
 

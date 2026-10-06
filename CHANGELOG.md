@@ -4,6 +4,29 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 1.0
+- Neu: **Neue, präzise Suchsyntax.** Ein Wort findet jetzt das ganze Wort; der
+  Stern `*` dient als Platzhalter im Wort (`rot*`, `*rot`, `ro*t`); mehrere
+  Wörter mit Leerzeichen sind eine feste Wortfolge; `"…"` ist eine Phrase (mit
+  `*` auch über Wortgrenzen); ein `-` schließt einen Begriff aus.
+- Neu: **Suchbereich** wählbar – Alles (Name + Inhalt), Ordnernamen, Dateinamen
+  oder Dateiinhalt – samt Optionen „Groß-/Kleinschreibung beachten", „Über
+  Absatz hinweg suchen" und „Reichweite des Sterns begrenzen".
+- Neu: **Fundstellen werden im Textausschnitt farblich hervorgehoben** und mit
+  »…« umrahmt, zentriert auf den Treffer.
+- Neu: **Hilfe-Menü (❓)** oben erklärt alle Suchoptionen und die Syntax direkt
+  in der App.
+- Neu: Die **erweiterte Suche** (Dateiname/Autor/Titel/Buchserie) versteht
+  dieselbe Syntax; alle Kriterien werden mit UND kombiniert.
+- Verbessert: **Ordnersuche über Ordnername UND ganzen Pfad.**
+- Verbessert: **Vollständig zweisprachig (Deutsch/Englisch)** – die App folgt
+  der Systemsprache; die Benachrichtigung bei fehlender Berechtigung ebenfalls.
+- Verbessert: **Spürbar schneller bei sehr großen Sammlungen** – häufige
+  Begriffe, Phrasen und Ausschlüsse werden direkt von der Volltext-Engine
+  beantwortet, ohne alle Texte zu laden.
+- Doku: Anleitung/Guide erklären die Suche nun ausführlich mit Beispielen;
+  Screenshots aktualisiert.
+
 ## 0.52
 - Behoben: Reine Text- und Code-Dateien wurden beim Indizieren mitunter schon
   nach dem Anfang abgeschnitten; jetzt wird bis zum Ende gelesen, sodass der

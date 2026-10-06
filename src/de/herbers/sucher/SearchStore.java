@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import de.herbers.sucher.search.SearchQuery;
+
 /**
  * Eigener Datei-Volltext-Index (Name, Ort, Aenderungszeit + extrahierter
  * Inhalt) - wie NotificationStore, nur mit einer FTS4-Volltexttabelle statt
@@ -321,6 +323,7 @@ public class SearchStore extends SQLiteOpenHelper {
         public long size, mtime, created;
         public float seriesIndex;
         public boolean drm;
+        public boolean isFolder;   // true = Ordner-Treffer (Suchbereich "Ordnernamen")
     }
 
     private static final String FILE_COLS =
@@ -358,77 +361,234 @@ public class SearchStore extends SQLiteOpenHelper {
         return " AND " + col + " LIKE ? ESCAPE '\\'";
     }
 
-    /** Volltext- und Namenssuche kombiniert: FTS-Treffer (Inhalt+Titel) plus
-     *  Dateien, deren Name/Titel/Autor/Serie passt, auch ohne indizierten
-     *  Inhalt (z.B. Bilder, Comics ohne ComicInfo.xml, Dateien ohne
-     *  unterstuetztes Format). scope (optional): nur Pfade aus dieser Menge
-     *  beruecksichtigen - "in diesen Ergebnissen weitersuchen". */
-    public List<FileHit> search(String query, int limit, Collection<String> scope, String folderPrefix) {
+    // ---- Neue, engine-basierte Suche (Suchsyntax-Spezifikation §10) ----------
+
+    public static final int AREA_FOLDER = 0;   // Ordnernamen (aus Pfaden abgeleitet)
+    public static final int AREA_FILE = 1;     // Dateinamen
+    public static final int AREA_CONTENT = 2;  // Dateiinhalt
+    public static final int AREA_ALL = 3;      // Dateiname ODER Inhalt (wie fruehere Standardsuche)
+
+    /** Engine-basierte Suche mit der neuen Syntax (siehe SearchQuery). Der
+     *  Suchbereich (area) ist einzeln gewaehlt; FTS/LIKE liefern nur Kandidaten,
+     *  der exakte Abgleich macht SearchQuery.matches(). Bei Inhalt wird ein
+     *  Schnipsel erzeugt; bei Ordnernamen werden die Ordner aus den Dateipfaden
+     *  abgeleitet (FileHit.isFolder = true). */
+    public List<FileHit> searchEngine(String query, int area, SearchQuery.Options opts,
+                                      int limit, Collection<String> scope, String folderPrefix) {
         List<FileHit> out = new ArrayList<>();
-        if (query == null || query.trim().isEmpty()) return out;
-        String q = query.trim();
-        java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+        SearchQuery q = SearchQuery.parse(query);
+        if (q.isEmpty()) return out;
         SQLiteDatabase db = getReadableDatabase();
 
-        // 1) Volltext (Titel+Inhalt), mit Fundstellen-Schnipsel.
-        try {
-            String ftsQuery = ftsEscape(q);
-            List<String> args1 = new ArrayList<>();
-            args1.add(ftsQuery);
-            String scopeSql1 = scopeClause(scope, args1);
-            String folderSql1 = folderClause(folderPrefix, args1, "f.path");
-            args1.add(String.valueOf(limit));
-            Cursor c = db.rawQuery(
-                    "SELECT f." + FILE_COLS.replace(", ", ", f.") + ", "
-                    + "snippet(content_fts, '', '', '…', -1, 40) "
-                    + "FROM content_fts JOIN files f ON f.path = content_fts.path "
-                    + "WHERE content_fts MATCH ?" + scopeSql1.replace("path", "f.path") + folderSql1 + " LIMIT ?",
-                    args1.toArray(new String[0]));
-            while (c.moveToNext()) {
-                FileHit h = row(c);
-                h.snippet = c.getString(11);
-                if (seen.add(h.path)) out.add(h);
-            }
-            c.close();
-        } catch (Exception ignored) {
-            // Ungueltige FTS-Syntax (z.B. einzelnes Sonderzeichen) - einfach
-            // ohne Volltext-Treffer weitermachen, Namenssuche greift unten.
+        if (area == AREA_ALL) {
+            // "Alles" = Dateiname ODER Inhalt (wie die fruehere Standardsuche),
+            // mit der neuen Syntax, nach Pfad entdoppelt. Inhalts-Treffer zuerst
+            // (die bringen einen Schnipsel mit).
+            java.util.LinkedHashMap<String, FileHit> merged = new java.util.LinkedHashMap<>();
+            for (FileHit h : searchEngine(query, AREA_CONTENT, opts, limit, scope, folderPrefix))
+                merged.put(h.path, h);
+            for (FileHit h : searchEngine(query, AREA_FILE, opts, limit, scope, folderPrefix))
+                merged.putIfAbsent(h.path, h);
+            out.addAll(merged.values());
+            return out.size() > limit ? new ArrayList<>(out.subList(0, limit)) : out;
         }
 
-        // 2) Dateiname/Titel/Autor/Serie passt (LIKE), unabhaengig von Volltext.
-        String like = "%" + q + "%";
-        List<String> args2 = new ArrayList<>();
-        args2.add(like); args2.add(like); args2.add(like); args2.add(like);
-        String scopeSql2 = scopeClause(scope, args2);
-        String folderSql2 = folderClause(folderPrefix, args2, "path");
-        args2.add(String.valueOf(limit));
-        Cursor c2 = db.rawQuery(
-                "SELECT " + FILE_COLS + " FROM files "
-                + "WHERE (name LIKE ? OR title LIKE ? OR author LIKE ? OR series LIKE ?)" + scopeSql2 + folderSql2
-                + " ORDER BY mtime DESC LIMIT ?",
-                args2.toArray(new String[0]));
-        while (c2.moveToNext()) {
-            FileHit h = row(c2);
-            if (seen.add(h.path)) out.add(h);
+        if (area == AREA_CONTENT) {
+            // Schnellpfad: einfache Wortsuche (ganzes Wort / Wort mit Endstern,
+            // ohne Ausschluss/Phrase/Innenstern, nicht case-sensitiv) kann FTS
+            // exakt beantworten - OHNE die kompletten Dateitexte zu laden. Das
+            // verhindert, dass ein haeufiger Begriff in einer grossen Bibliothek
+            // hunderte MB Text in den (Single-Thread-)Suchthread zieht und jede
+            // weitere Suche minutenlang blockiert (Haenger-Bericht 2026-10-06).
+            // Der SQLite-snippet() liefert den Fundstellen-Ausschnitt direkt.
+            if (!opts.caseSensitive && !q.needsBodyScan()) {
+                String ftsX = q.ftsExact();
+                if (ftsX != null) {
+                    // Ausschluss-Begriffe: Pfade sammeln, die einen Ausschluss
+                    // treffen (eigene FTS-Abfragen statt des unsicheren NOT),
+                    // und danach herausfiltern.
+                    java.util.Set<String> excluded = new java.util.HashSet<>();
+                    for (String negExpr : q.ftsExcludeExprs()) {
+                        Cursor ce = db.rawQuery(
+                                "SELECT path FROM content_fts WHERE content_fts MATCH ?",
+                                new String[]{negExpr});
+                        while (ce.moveToNext()) excluded.add(ce.getString(0));
+                        ce.close();
+                    }
+                    List<String> a = new ArrayList<>();
+                    a.add(ftsX);
+                    String sc = scopeClause(scope, a).replace("path", "f.path");
+                    String fo = folderClause(folderPrefix, a, "f.path");
+                    // Bei Ausschluessen mehr Kandidaten ziehen, da danach welche
+                    // wegfallen - sonst faellt die Trefferzahl unter das Limit.
+                    a.add(String.valueOf(excluded.isEmpty() ? limit : limit * 3));
+                    Cursor cf = db.rawQuery(
+                            "SELECT f." + FILE_COLS.replace(", ", ", f.") + ", "
+                            // Treffer-Marker als Steuerzeichen (U+0002/U+0003), die
+                            // in echtem Text nicht vorkommen - deutsche Buecher nutzen
+                            // »...« als Anfuehrungszeichen, die duerfen NICHT als
+                            // Fundstelle missdeutet werden. Die UI faerbt + rahmt sie.
+                            // 24 Tokens: kurzes, um die Fundstelle zentriertes
+                            // Fenster, damit die markierten Fundwoerter sicher in
+                            // den sichtbaren Zeilen liegen (nicht unter maxLines).
+                            + "snippet(content_fts, char(2), char(3), '…', 2, 24) "
+                            + "FROM content_fts JOIN files f ON f.path = content_fts.path "
+                            + "WHERE content_fts MATCH ?" + sc + fo + " LIMIT ?",
+                            a.toArray(new String[0]));
+                    int snipCol = cf.getColumnCount() - 1;
+                    while (cf.moveToNext() && out.size() < limit) {
+                        FileHit h = row(cf);
+                        if (excluded.contains(h.path)) continue;
+                        h.snippet = cf.getString(snipCol);
+                        out.add(h);
+                    }
+                    cf.close();
+                    return out;
+                }
+            }
+            // Genauer Pfad (Phrase/Ausschluss/Innenstern/case-sensitiv): Text
+            // pruefen. Die Kandidaten werden mit CAND_CAP gedeckelt, damit nie
+            // die ganze Bibliothek in Java gescannt wird.
+            final int CAND_CAP = Math.max(limit * 3, 1000);
+            // Vorfilter so ENG wie moeglich: der exakte FTS-Ausdruck (Phrase/Wort)
+            // gilt auch bei "Gross/klein beachten" als case-insensitiver Superset
+            // -> dann nur die wenigen echten FTS-Treffer scannen (statt lockerem
+            // Praefix ueber zehntausende Buecher). Sonst lockerer Praefix-Vorfilter.
+            String fts = q.ftsExact();
+            if (fts == null) fts = q.ftsMatch();
+            List<String> args = new ArrayList<>();
+            String where;
+            if (fts != null) {
+                args.add(fts);
+                where = "content_fts MATCH ?"
+                        + scopeClause(scope, args).replace("path", "f.path")
+                        + folderClause(folderPrefix, args, "f.path");
+            } else {
+                // Kein praefix-sicherer Begriff (z.B. *rot* oder reine Ausschluss-
+                // suche) -> begrenzter Scan ueber den Inhalt, der Matcher filtert.
+                String sc = scopeClause(scope, args).replace("path", "f.path");
+                String fo = folderClause(folderPrefix, args, "f.path");
+                where = (sc.isEmpty() && fo.isEmpty()) ? "1=1" : ("1=1" + sc + fo);
+            }
+            Cursor c = db.rawQuery(
+                    "SELECT f.path, content_fts.body FROM content_fts "
+                    + "JOIN files f ON f.path = content_fts.path WHERE " + where
+                    + " LIMIT " + CAND_CAP,
+                    args.toArray(new String[0]));
+            while (c.moveToNext() && out.size() < limit) {
+                String path = c.getString(0);
+                String body = c.getString(1);
+                if (body == null) continue;
+                if (q.matches(body, false, opts)) {
+                    FileHit h = fileRowByPath(db, path);
+                    if (h == null) continue;
+                    h.snippet = q.snippet(body, 40);
+                    out.add(h);
+                }
+            }
+            c.close();
+            return out;
         }
-        c2.close();
+
+        if (area == AREA_FILE) {
+            String frag = q.likeFragment();
+            List<String> args = new ArrayList<>();
+            StringBuilder where = new StringBuilder(frag != null ? "name LIKE ?" : "1=1");
+            if (frag != null) args.add("%" + frag + "%");
+            where.append(scopeClause(scope, args));
+            where.append(folderClause(folderPrefix, args, "path"));
+            Cursor c = db.rawQuery(
+                    "SELECT " + FILE_COLS + " FROM files WHERE " + where + " ORDER BY mtime DESC",
+                    args.toArray(new String[0]));
+            while (c.moveToNext() && out.size() < limit) {
+                FileHit h = row(c);
+                if (q.matches(h.name, true, opts)) out.add(h);
+            }
+            c.close();
+            return out;
+        }
+
+        // AREA_FOLDER: Ordner aus den Dateipfaden ableiten und matchen - gegen
+        // den Ordnernamen UND den ganzen Ordnerpfad (Mathias' Wunsch: nicht
+        // oder, sondern und). LIKE-Vorfilter auf path verengt die Kandidaten
+        // (ein Namenstreffer steckt immer auch im Pfad).
+        List<String> args = new ArrayList<>();
+        StringBuilder where = new StringBuilder("1=1");
+        String frag = q.likeFragment();
+        if (frag != null) { where.append(" AND path LIKE ?"); args.add("%" + frag + "%"); }
+        where.append(scopeClause(scope, args));
+        where.append(folderClause(folderPrefix, args, "path"));
+        Cursor c = db.rawQuery(
+                "SELECT DISTINCT path FROM files WHERE " + where, args.toArray(new String[0]));
+        java.util.LinkedHashSet<String> folders = new java.util.LinkedHashSet<>();
+        while (c.moveToNext()) {
+            String p = c.getString(0);
+            int idx = p.lastIndexOf('/');
+            while (idx > 0) {
+                String dir = p.substring(0, idx);
+                if (!folders.add(dir)) break;   // Ordner + Vorfahren schon erfasst
+                idx = dir.lastIndexOf('/');
+            }
+        }
+        c.close();
+        for (String dir : folders) {
+            if (out.size() >= limit) break;
+            String name = dir.substring(dir.lastIndexOf('/') + 1);
+            if (name.isEmpty()) continue;
+            // Treffer, wenn der Ordnername ODER der ganze Pfad die Suche erfuellt.
+            if (q.matches(name, true, opts) || q.matches(dir, true, opts)) {
+                FileHit h = new FileHit();
+                h.path = dir;
+                h.name = name;
+                h.isFolder = true;
+                out.add(h);
+            }
+        }
         return out;
     }
 
+    /** Eine einzelne Datei-Zeile per Pfad holen (fuer Inhalts-Treffer). */
+    private FileHit fileRowByPath(SQLiteDatabase db, String path) {
+        Cursor c = db.rawQuery("SELECT " + FILE_COLS + " FROM files WHERE path = ?",
+                new String[]{path});
+        FileHit h = c.moveToFirst() ? row(c) : null;
+        c.close();
+        return h;
+    }
+
+    /** Ein Feld der erweiterten Suche als Suchanfrage parsen; null, wenn leer. */
+    private static SearchQuery parseField(String s) {
+        if (s == null || s.trim().isEmpty()) return null;
+        SearchQuery q = SearchQuery.parse(s);
+        return q.isEmpty() ? null : q;
+    }
+
+    private static String nz(String s) { return s == null ? "" : s; }
+
     /** Erweiterte Suche: jedes nicht-leere Feld wird per AND kombiniert -
      *  Dateiname/Autor/Titel/Serie/Dateiart/Erstellt-Zeitraum/Geaendert-
-     *  Zeitraum (Mathias' Wunsch nach kombinierbaren Kriterien). */
+     *  Zeitraum (Mathias' Wunsch nach kombinierbaren Kriterien). Die Textfelder
+     *  nutzen jetzt die volle Suchsyntax (ganzes Wort, Stern, Phrase, Ausschluss)
+     *  via SearchQuery; LIKE dient nur noch als grober Kandidaten-Vorfilter, der
+     *  genaue Abgleich passiert mit matches() pro Feld. */
     public List<FileHit> advancedSearch(String name, String author, String title, String series,
                                          java.util.Set<String> exts, long createdFrom, long createdTo,
                                          long modifiedFrom, long modifiedTo, int limit,
-                                         Collection<String> scope, String folderPrefix) {
+                                         Collection<String> scope, String folderPrefix,
+                                         SearchQuery.Options opts) {
         List<FileHit> out = new ArrayList<>();
+        SearchQuery qName = parseField(name), qAuthor = parseField(author),
+                    qTitle = parseField(title), qSeries = parseField(series);
+        if (opts == null) opts = new SearchQuery.Options();
+
         StringBuilder where = new StringBuilder("1=1");
         List<String> args = new ArrayList<>();
-        if (name != null && !name.trim().isEmpty()) { where.append(" AND name LIKE ?"); args.add("%" + name.trim() + "%"); }
-        if (author != null && !author.trim().isEmpty()) { where.append(" AND author LIKE ?"); args.add("%" + author.trim() + "%"); }
-        if (title != null && !title.trim().isEmpty()) { where.append(" AND title LIKE ?"); args.add("%" + title.trim() + "%"); }
-        if (series != null && !series.trim().isEmpty()) { where.append(" AND series LIKE ?"); args.add("%" + series.trim() + "%"); }
+        // LIKE-Vorfilter nur mit dem laengsten positiven Literal des Feldes
+        // (schnelle SQL-Vorauswahl); der genaue Abgleich folgt in Java.
+        appendLikePrefilter(where, args, "name", qName);
+        appendLikePrefilter(where, args, "author", qAuthor);
+        appendLikePrefilter(where, args, "title", qTitle);
+        appendLikePrefilter(where, args, "series", qSeries);
         if (exts != null && !exts.isEmpty()) {
             // Mehrere Dateiarten gleichzeitig auswaehlbar (Mathias' Wunsch) -
             // "ext IN (?,?,...)" statt der frueheren Einzelauswahl "ext = ?".
@@ -443,13 +603,34 @@ public class SearchStore extends SQLiteOpenHelper {
         if (modifiedTo > 0) { where.append(" AND mtime <= ?"); args.add(String.valueOf(modifiedTo)); }
         where.append(scopeClause(scope, args));
         where.append(folderClause(folderPrefix, args, "path"));
-        args.add(String.valueOf(limit));
+
+        // Muss nach dem SQL-Vorfilter noch in Java gefiltert werden?
+        boolean needJava = qName != null || qAuthor != null || qTitle != null || qSeries != null;
+        int cap = limit < 0 ? Integer.MAX_VALUE : limit;
+        // Bei Java-Filter mehr Kandidaten ziehen (es fallen welche weg); sonst exakt.
+        String sqlLimit = needJava ? (limit < 0 ? "-1" : String.valueOf(Math.max(limit * 4, 2000)))
+                                    : String.valueOf(limit);
         Cursor c = getReadableDatabase().rawQuery(
-                "SELECT " + FILE_COLS + " FROM files WHERE " + where + " ORDER BY mtime DESC LIMIT ?",
+                "SELECT " + FILE_COLS + " FROM files WHERE " + where + " ORDER BY mtime DESC LIMIT " + sqlLimit,
                 args.toArray(new String[0]));
-        while (c.moveToNext()) out.add(row(c));
+        while (c.moveToNext() && out.size() < cap) {
+            FileHit h = row(c);
+            if (qName   != null && !qName.matches(nz(h.name),   true, opts)) continue;
+            if (qAuthor != null && !qAuthor.matches(nz(h.author), true, opts)) continue;
+            if (qTitle  != null && !qTitle.matches(nz(h.title),  true, opts)) continue;
+            if (qSeries != null && !qSeries.matches(nz(h.series), true, opts)) continue;
+            out.add(h);
+        }
         c.close();
         return out;
+    }
+
+    /** Haengt fuer ein Feld einen LIKE-'%literal%'-Vorfilter an, falls die
+     *  Anfrage ein positives Literal hat (sonst kein Vorfilter -> Java filtert). */
+    private void appendLikePrefilter(StringBuilder where, List<String> args, String col, SearchQuery q) {
+        if (q == null) return;
+        String frag = q.likeFragment();
+        if (frag != null) { where.append(" AND ").append(col).append(" LIKE ?"); args.add("%" + frag + "%"); }
     }
 
     /** Alle im Index vorkommenden Dateiendungen - fuer die Dateiart-Auswahl
