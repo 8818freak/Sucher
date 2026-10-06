@@ -200,6 +200,17 @@ public class MainActivity extends Activity {
     // die Ansicht bei JEDER Kleinigkeit (Dateiart antippen, Datum waehlen...)
     // zurueck nach oben (Mathias: "das ist laestig").
     private int pendingScrollY = -1;
+    // Wie pendingScrollY, aber fuer die SUCHE: deren Treffer kommen aus einem
+    // Hintergrund-Thread und stehen beim rebuild() noch gar nicht - ein sofortiges
+    // scrollTo() liefe daher ins Leere (Liste noch leer) und die Ansicht sprang
+    // nach dem Nachladen doch wieder nach oben (Mathias: "Sucher verspringt wieder,
+    // nachdem man im Kontextmenue eine Datei ... durchgeschnitten hat"). Darum
+    // erst wiederherstellen, wenn runSearch die Treffer tatsaechlich aufgebaut hat.
+    private int pendingSearchScrollY = -1;
+    // Unterdrueckt den TextWatcher genau einmal: beim rebuild() setzen wir das
+    // Suchfeld per setText(lastQuery) auf den alten Text zurueck - dessen Echo
+    // soll keine zweite (doppelte) Suche ausloesen, die Suche laeuft schon direkt.
+    private boolean suppressWatcher = false;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -327,13 +338,20 @@ public class MainActivity extends Activity {
         head.addView(gear);
         root.addView(head);
 
-        if (showSettings) buildSettings(root, d);
-        else buildSearch(root, d);
-
-        if (pendingScrollY >= 0) {
-            final int y = pendingScrollY;
+        if (showSettings) {
+            buildSettings(root, d);
+            // Einstellungen werden synchron aufgebaut - Position sofort zurueck.
+            if (pendingScrollY >= 0) {
+                final int y = pendingScrollY;
+                pendingScrollY = -1;
+                scroll.post(() -> scroll.scrollTo(0, y));
+            }
+        } else {
+            // Suche: Treffer kommen asynchron. Position merken, runSearch stellt
+            // sie nach dem Aufbau wieder her; hier NICHT sofort scrollen.
+            pendingSearchScrollY = pendingScrollY;
             pendingScrollY = -1;
-            scroll.post(() -> scroll.scrollTo(0, y));
+            buildSearch(root, d);
         }
         startIndexTicker();
     }
@@ -470,6 +488,11 @@ public class MainActivity extends Activity {
                 lastSearchWasAdvanced = false;
                 clearBtn.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
                 historyBox.setVisibility(q.trim().isEmpty() ? View.VISIBLE : View.GONE);
+                // Echo des setText(lastQuery) aus rebuild(): keine zweite Suche
+                // anstossen (die laeuft schon direkt) - sonst baute sie die Liste
+                // ein zweites Mal auf und die wiederhergestellte Scroll-Position
+                // ging wieder verloren.
+                if (suppressWatcher) { suppressWatcher = false; return; }
                 if (pendingSearch != null) DEBOUNCE.removeCallbacks(pendingSearch);
                 pendingSearch = () -> runSearch(q, results, d);
                 DEBOUNCE.postDelayed(pendingSearch, 250);
@@ -493,10 +516,14 @@ public class MainActivity extends Activity {
         if (lastSearchWasAdvanced && advancedOpen) {
             runAdvancedSearch();
         } else if (!lastQuery.isEmpty()) {
+            suppressWatcher = true; // Echo des folgenden setText nicht als Tippen werten
             field.setText(lastQuery);
             field.setSelection(lastQuery.length());
             historyBox.setVisibility(View.GONE);
             runSearch(lastQuery, results, d);
+        } else {
+            // Leere Suche: nichts wiederherzustellen.
+            pendingSearchScrollY = -1;
         }
     }
 
@@ -1294,6 +1321,7 @@ public class MainActivity extends Activity {
         FILE_SHOWN.clear(); // frische Suche -> Anzeige-Zähler zurücksetzen
         results.removeAllViews();
         if (q == null || q.trim().length() < 2) {
+            pendingSearchScrollY = -1; // nichts aufzubauen -> keine Position merken
             TextView hint = new TextView(this);
             hint.setText(getString(R.string.ui_mindestens_2_zeichen_eingebe));
             hint.setTextColor(Color.parseColor("#8899AA"));
@@ -1358,6 +1386,7 @@ public class MainActivity extends Activity {
                     none.setTextColor(Color.parseColor("#8899AA"));
                     none.setTextSize(13 * fs);
                     results.addView(none);
+                    pendingSearchScrollY = -1;
                     return;
                 }
                 // Die zuletzt geoeffnete Datei hervorheben und ins Blickfeld
@@ -1377,7 +1406,18 @@ public class MainActivity extends Activity {
                 if (!sms.isEmpty()) results.addView(card(getString(R.string.cat_sms), sms.size(), d, smsRows(sms, d), "sms"));
                 if (!calls.isEmpty()) results.addView(card(getString(R.string.cat_calls), calls.size(), d, callRows(calls, d), "calls"));
                 if (!notifs.isEmpty()) results.addView(card(getString(R.string.cat_notifs), notifs.size(), d, notifRows(notifs, d), "notifs"));
-                if (highlightHolder[0] != null) scrollToRow(highlightHolder[0]);
+                // Scroll-Position: Vorrang hat eine hervorgehobene Zeile (zuletzt
+                // geoeffnete Datei). Sonst die vor dem rebuild() gemerkte Position
+                // wiederherstellen - erst JETZT, wo die Treffer wirklich stehen und
+                // die Liste ihre volle Hoehe hat (sonst verspraenge die Ansicht).
+                if (highlightHolder[0] != null) {
+                    pendingSearchScrollY = -1;
+                    scrollToRow(highlightHolder[0]);
+                } else if (pendingSearchScrollY >= 0) {
+                    final int y = pendingSearchScrollY;
+                    pendingSearchScrollY = -1;
+                    scroll.post(() -> scroll.scrollTo(0, y));
+                }
             });
         });
     }
@@ -1512,6 +1552,11 @@ public class MainActivity extends Activity {
     }
 
     private View fileRow(SearchStore.FileHit h, int d, View[] highlightHolder) {
+        // Während der Undo-Frist eines Löschvorgangs den betroffenen Treffer
+        // ausblenden (der Index-Eintrag bleibt für „Rückgängig" erhalten).
+        if (!h.isFolder && h.path.equals(pendingDeletePath)) {
+            View gone = new View(this); gone.setVisibility(View.GONE); return gone;
+        }
         LinearLayout row = resultRow(d);
         boolean isLastOpened = h.path.equals(lastOpenedPath);
         if (isLastOpened) {
@@ -1583,7 +1628,180 @@ public class MainActivity extends Activity {
             if (h.isFolder) { scopeFolder = h.path; rebuild(); }
             else openFile(h.path);
         });
+        if (!h.isFolder) row.setOnLongClickListener(v -> { showFileMenu(v, h); return true; });
         return row;
+    }
+
+    // ---------- Datei-Kontextmenü (Langdruck auf einen Datei-Treffer) ----------
+
+    private String pendingDeletePath;        // während der Undo-Frist ausgeblendeter Pfad
+    private java.io.File pendingTrashFile;   // dorthin (Cache-Papierkorb) verschoben
+    private View pendingUndoBar;             // Overlay-Leiste „… gelöscht – Rückgängig"
+    private final android.os.Handler undoHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    /** Langdruck-Menü: Öffnen mit / Teilen / Pfad kopieren / Löschen. */
+    private void showFileMenu(View anchor, SearchStore.FileHit h) {
+        android.widget.PopupMenu pm = new android.widget.PopupMenu(this, anchor);
+        pm.getMenu().add(0, 1, 0, getString(R.string.menu_open_with));
+        pm.getMenu().add(0, 2, 1, getString(R.string.menu_share));
+        pm.getMenu().add(0, 3, 2, getString(R.string.menu_copy_path));
+        pm.getMenu().add(0, 4, 3, getString(R.string.menu_delete));
+        pm.setOnMenuItemClickListener(item -> {
+            switch (item.getItemId()) {
+                case 1: openWith(h); return true;
+                case 2: shareFile(h); return true;
+                case 3: copyPathToClipboard(h.path); return true;
+                case 4: confirmDelete(h); return true;
+            }
+            return false;
+        });
+        pm.show();
+    }
+
+    private String mimeOf(java.io.File f) {
+        String m = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extOf(f.getName()));
+        return m != null ? m : "*/*";
+    }
+
+    private void openWith(SearchStore.FileHit h) {
+        try {
+            java.io.File f = new java.io.File(h.path);
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(LocalFileProvider.uriForFile(this, f), mimeOf(f))
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(i, getString(R.string.menu_open_with)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignored) {}
+    }
+
+    private void shareFile(SearchStore.FileHit h) {
+        try {
+            java.io.File f = new java.io.File(h.path);
+            Intent i = new Intent(Intent.ACTION_SEND).setType(mimeOf(f))
+                    .putExtra(Intent.EXTRA_STREAM, LocalFileProvider.uriForFile(this, f))
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(i, getString(R.string.menu_share)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        } catch (Exception ignored) {}
+    }
+
+    private void copyPathToClipboard(String path) {
+        try {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("path", path));
+            Toast.makeText(this, getString(R.string.path_copied), Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {}
+    }
+
+    /** Sicherheitsrückfrage vor dem Löschen (Mathias' Wunsch): „wirklich?",
+     *  mit dem klaren Hinweis, dass es danach nur kurz rückgängig zu machen ist.
+     *  Erst nach Bestätigung geht es in deleteFileWithUndo (mit Undo-Leiste). */
+    private void confirmDelete(SearchStore.FileHit h) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.confirm_delete_title))
+                .setMessage(getString(R.string.confirm_delete_msg, h.name))
+                .setNegativeButton(getString(R.string.action_cancel), null)
+                .setPositiveButton(getString(R.string.confirm_delete_yes),
+                        (dlg, which) -> deleteFileWithUndo(h))
+                .show();
+    }
+
+    /** Löschen mit Undo: Datei in den Cache-Papierkorb verschieben, Treffer
+     *  ausblenden, „Rückgängig"-Leiste zeigen. Nach Ablauf der Frist (oder beim
+     *  nächsten Löschen) endgültig löschen und aus dem Index entfernen. */
+    private void deleteFileWithUndo(SearchStore.FileHit h) {
+        finalizePendingDelete();
+        try {
+            java.io.File src = new java.io.File(h.path);
+            java.io.File trashDir = new java.io.File(getCacheDir(), "trash");
+            trashDir.mkdirs();
+            java.io.File dst = new java.io.File(trashDir, System.currentTimeMillis() + "_" + src.getName());
+            if (!src.renameTo(dst)) {
+                if (!(copyFile(src, dst) && src.delete())) {
+                    Toast.makeText(this, getString(R.string.ui_loschen_fehlgeschlagen), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+            pendingDeletePath = h.path;
+            pendingTrashFile = dst;
+            if (h.path.equals(lastOpenedPath)) lastOpenedPath = null;
+            rebuild();
+            showUndoBar(h.name);
+            undoHandler.postDelayed(this::finalizePendingDelete, 6000);
+        } catch (Exception e) {
+            Toast.makeText(this, getString(R.string.ui_loschen_fehlgeschlagen), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showUndoBar(String name) {
+        removeUndoBar();
+        int d = dp(1);
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(16 * d, 12 * d, 16 * d, 12 * d);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor("#F0303034"));
+        bg.setCornerRadius(12 * d);
+        bar.setBackground(bg);
+        bar.setElevation(8 * d);
+        bar.setClickable(true);
+        TextView t = new TextView(this);
+        t.setText(getString(R.string.file_deleted_undo, name));
+        t.setTextColor(Color.parseColor("#E0E0E0"));
+        t.setTextSize(13 * fs);
+        t.setMaxLines(2);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        bar.addView(t);
+        TextView undo = new TextView(this);
+        undo.setText(getString(R.string.undo_label));
+        undo.setTextColor(Color.parseColor("#2E9BE6"));
+        undo.setTypeface(null, android.graphics.Typeface.BOLD);
+        undo.setTextSize(13 * fs);
+        undo.setPadding(16 * d, 6 * d, 0, 6 * d);
+        undo.setOnClickListener(v -> undoDelete());
+        bar.addView(undo);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT, android.widget.FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        lp.setMargins(12 * d, 0, 12 * d, 16 * d);
+        addContentView(bar, lp);
+        pendingUndoBar = bar;
+    }
+
+    private void removeUndoBar() {
+        if (pendingUndoBar != null) {
+            android.view.ViewParent p = pendingUndoBar.getParent();
+            if (p instanceof android.view.ViewGroup) ((android.view.ViewGroup) p).removeView(pendingUndoBar);
+            pendingUndoBar = null;
+        }
+    }
+
+    private void undoDelete() {
+        undoHandler.removeCallbacksAndMessages(null);
+        try {
+            if (pendingTrashFile != null && pendingDeletePath != null) {
+                java.io.File back = new java.io.File(pendingDeletePath);
+                if (!pendingTrashFile.renameTo(back)) { copyFile(pendingTrashFile, back); pendingTrashFile.delete(); }
+            }
+        } catch (Exception ignored) {}
+        pendingDeletePath = null; pendingTrashFile = null;
+        removeUndoBar();
+        rebuild();
+    }
+
+    private void finalizePendingDelete() {
+        undoHandler.removeCallbacksAndMessages(null);
+        if (pendingTrashFile != null) { try { pendingTrashFile.delete(); } catch (Exception ignored) {} }
+        if (pendingDeletePath != null) { try { SearchStore.get(this).forgetPath(pendingDeletePath); } catch (Exception ignored) {} }
+        pendingDeletePath = null; pendingTrashFile = null;
+        removeUndoBar();
+    }
+
+    private boolean copyFile(java.io.File src, java.io.File dst) {
+        try (java.io.InputStream in = new java.io.FileInputStream(src);
+             java.io.OutputStream out = new java.io.FileOutputStream(dst)) {
+            byte[] buf = new byte[65536]; int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            return true;
+        } catch (Exception e) { return false; }
     }
 
     private void openFile(String path) {

@@ -633,6 +633,14 @@ public class SearchStore extends SQLiteOpenHelper {
         if (frag != null) { where.append(" AND ").append(col).append(" LIKE ?"); args.add("%" + frag + "%"); }
     }
 
+    /** Eine einzelne Datei aus dem Index entfernen (nach dem Löschen der Datei
+     *  über das Datei-Kontextmenü). */
+    public void forgetPath(String path) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.delete("files", "path = ?", new String[]{path});
+        db.delete("content_fts", "path = ?", new String[]{path});
+    }
+
     /** Alle im Index vorkommenden Dateiendungen - fuer die Dateiart-Auswahl
      *  in der erweiterten Suche, nicht fest verdrahtet. */
     public List<String> distinctExts() {

@@ -247,4 +247,15 @@
     <string name="perm_reminder_text">"%1$s is no longer granted – tap to grant."</string>
     <string name="perm_reminder_bigtext">"%1$s was set up but is no longer granted (e.g. after a system update). Tap to grant it again – or “Ignore” if that is intended."</string>
     <string name="perm_reminder_ignore">"Ignore"</string>
+    <string name="menu_open_with">"Open with…"</string>
+    <string name="menu_share">"Share"</string>
+    <string name="menu_copy_path">"Copy path"</string>
+    <string name="menu_delete">"Delete file"</string>
+    <string name="path_copied">"Path copied"</string>
+    <string name="file_deleted_undo">"\"%s\" deleted"</string>
+    <string name="undo_label">"Undo"</string>
+    <string name="confirm_delete_title">"Delete file?"</string>
+    <string name="confirm_delete_msg">"Really delete \"%s\"? Afterwards this can only be undone for a few seconds."</string>
+    <string name="confirm_delete_yes">"Delete"</string>
+    <string name="action_cancel">"Cancel"</string>
 </resources>

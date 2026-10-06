@@ -247,4 +247,15 @@
     <string name="perm_reminder_text">"%1$s ist nicht mehr erteilt – tippen zum Erteilen."</string>
     <string name="perm_reminder_bigtext">"%1$s war eingerichtet, ist aber nicht mehr erteilt (z. B. durch ein System-Update). Tippen, um sie wieder zu erteilen – oder „Ignorieren“, falls das gewollt ist."</string>
     <string name="perm_reminder_ignore">"Ignorieren"</string>
+    <string name="menu_open_with">"Öffnen mit…"</string>
+    <string name="menu_share">"Teilen"</string>
+    <string name="menu_copy_path">"Pfad kopieren"</string>
+    <string name="menu_delete">"Datei löschen"</string>
+    <string name="path_copied">"Pfad kopiert"</string>
+    <string name="file_deleted_undo">"„%s“ gelöscht"</string>
+    <string name="undo_label">"Rückgängig"</string>
+    <string name="confirm_delete_title">"Datei löschen?"</string>
+    <string name="confirm_delete_msg">"„%s“ wirklich löschen? Danach lässt sich das nur wenige Sekunden lang rückgängig machen."</string>
+    <string name="confirm_delete_yes">"Löschen"</string>
+    <string name="action_cancel">"Abbrechen"</string>
 </resources>

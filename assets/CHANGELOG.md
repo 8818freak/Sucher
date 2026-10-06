@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen, neueste zuerst. Sucher wurde am 2026-09-24
 als eigenständige App aus EdgeTabs kurzlebiger "Suche"-Karte (EdgeTab 0.60)
 herausgelöst.
 
+## 1.1
+- Neu: **Datei-Kontextmenü** – ein langer Druck auf einen Datei-Treffer öffnet
+  ein Menü mit „Öffnen mit…“, „Teilen“, „Pfad kopieren“ und „Datei löschen“.
+- Neu: **Löschen mit Sicherheitsrückfrage** („wirklich löschen?“) und
+  anschließender „Rückgängig“-Leiste für einige Sekunden.
+- Behoben: Die Ergebnisliste sprang nach einer Aktion im Kontextmenü (und nach
+  Rückkehr aus einer anderen App) wieder nach ganz oben; sie bleibt jetzt an der
+  zuletzt angesehenen Stelle.
+
 ## 1.0
 - Neu: **Neue, präzise Suchsyntax.** Ein Wort findet jetzt das ganze Wort; der
   Stern `*` dient als Platzhalter im Wort (`rot*`, `*rot`, `ro*t`); mehrere
